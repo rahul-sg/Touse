@@ -10,31 +10,26 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.headline}>What can you afford?</h1>
-        <p className={styles.sub}>
-          Enter your finances and we'll show you your buying range, map affordable
-          listings, and forecast where prices are heading.
-        </p>
-      </header>
-
-      <div className={styles.content}>
-        <section className={styles.formSection}>
-          <h2 className={styles.sectionTitle}>Your finances</h2>
+      <div className={styles.hero}>
+        <div className={styles.heroCard}>
+          <h1 className={styles.heroHeadline}>Find out what home you can afford.</h1>
+          <p className={styles.heroSub}>Your income. Your savings. Your market.</p>
           <AffordabilityForm onSubmit={(data) => mutate(data)} isLoading={isPending} />
-        </section>
+        </div>
+      </div>
 
-        <section className={styles.resultSection}>
+      <div className={styles.resultWrap}>
+        <div className={styles.resultSection}>
           {isPending && (
             <div className={styles.placeholder}>
               <div className={styles.spinner} />
-              <p>Calculating…</p>
+              <p>Calculating your range…</p>
             </div>
           )}
 
           {isError && (
             <div className={styles.errorBox}>
-              <p>Something went wrong. Check that the backend is running and try again.</p>
+              Something went wrong. Check that the backend is running and try again.
             </div>
           )}
 
@@ -52,10 +47,10 @@ export default function Home() {
 
           {!data && !isPending && !isError && (
             <div className={styles.placeholder}>
-              <p>Fill in your finances to see your home buying range.</p>
+              <p>Your results will appear here.</p>
             </div>
           )}
-        </section>
+        </div>
       </div>
     </div>
   )

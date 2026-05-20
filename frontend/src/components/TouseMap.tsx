@@ -1,13 +1,14 @@
 import { useRef, useCallback, useState } from 'react'
-import Map, { type MapRef, NavigationControl } from 'react-map-gl/mapbox'
+import Map, { type MapRef, NavigationControl } from 'react-map-gl/maplibre'
 import type { BBox } from 'geojson'
 import Supercluster from 'supercluster'
 import type { Listing } from '../types'
 import ListingMarker from './ListingMarker'
 import ListingPopup from './ListingPopup'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? ''
+// OpenFreeMap — free vector tiles, no API key required
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 interface ViewState {
   longitude: number
@@ -18,6 +19,7 @@ interface ViewState {
 interface Props {
   listings: Listing[]
   onViewportChange?: (lat: number, lng: number, zoom: number) => void
+  maxPrice?: number
 }
 
 type GeoFeature = GeoJSON.Feature<GeoJSON.Point, Listing & { cluster: false }>
@@ -30,7 +32,7 @@ function toFeatures(listings: Listing[]): GeoFeature[] {
   }))
 }
 
-export default function TouseMap({ listings, onViewportChange }: Props) {
+export default function TouseMap({ listings, onViewportChange, maxPrice }: Props) {
   const mapRef = useRef<MapRef>(null)
   const [viewState, setViewState] = useState<ViewState>({
     longitude: -98.5795,
@@ -72,29 +74,30 @@ export default function TouseMap({ listings, onViewportChange }: Props) {
       ref={mapRef}
       {...viewState}
       onMove={handleMove}
-      mapStyle="mapbox://styles/mapbox/light-v11"
-      mapboxAccessToken={MAPBOX_TOKEN}
+      mapStyle={MAP_STYLE}
       style={{ width: '100%', height: '100%' }}
     >
       <NavigationControl position="top-right" />
 
       {clusters.map((cluster) => {
         const [lng, lat] = cluster.geometry.coordinates
-        const { cluster: isCluster, cluster_id, point_count } = cluster.properties as any
+        const { cluster: isCluster, cluster_id, point_count } = cluster.properties as Record<string, unknown>
 
         if (isCluster) {
           return (
             <ListingMarker
-              key={`cluster-${cluster_id}`}
+              key={`cluster-${cluster_id as number}`}
               lat={lat}
               lng={lng}
-              count={point_count}
-              onClick={() => handleClusterClick(cluster_id, lng, lat)}
+              count={point_count as number}
+              onClick={() => handleClusterClick(cluster_id as number, lng, lat)}
             />
           )
         }
 
         const listing = cluster.properties as Listing
+        const isAffordable = maxPrice == null || listing.price <= maxPrice
+
         return (
           <ListingMarker
             key={listing.id}
@@ -103,6 +106,7 @@ export default function TouseMap({ listings, onViewportChange }: Props) {
             price={listing.price}
             onClick={() => setSelected(listing)}
             isSelected={selected?.id === listing.id}
+            isAffordable={isAffordable}
           />
         )
       })}
@@ -111,6 +115,8 @@ export default function TouseMap({ listings, onViewportChange }: Props) {
         <ListingPopup
           listing={selected}
           onClose={() => setSelected(null)}
+          isAffordable={maxPrice == null || selected.price <= maxPrice}
+          userMaxPrice={maxPrice}
         />
       )}
     </Map>

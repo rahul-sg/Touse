@@ -7,15 +7,21 @@ import styles from './MapView.module.css'
 
 interface LocationState {
   maxPrice?: number
+  fromOnboarding?: boolean
 }
 
 const DEFAULT_MAX_PRICE = 600_000
 const DEFAULT_CENTER = { lat: 39.8283, lng: -98.5795 }
 
+function fmt(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
 export default function MapView() {
   const location = useLocation()
   const state = location.state as LocationState | null
 
+  const fromOnboarding = state?.fromOnboarding ?? false
   const [maxPrice, setMaxPrice] = useState(state?.maxPrice ?? DEFAULT_MAX_PRICE)
   const [minBeds, setMinBeds] = useState(1)
   const [viewport, setViewport] = useState(DEFAULT_CENTER)
@@ -33,24 +39,28 @@ export default function MapView() {
 
   return (
     <div className={styles.page}>
-      <ListingSidebar
-        listings={listings}
-        isLoading={isFetching}
-        maxPrice={maxPrice}
-        onMaxPriceChange={setMaxPrice}
-        minBeds={minBeds}
-        onMinBedsChange={setMinBeds}
-      />
-      <div className={styles.mapWrap}>
-        <TouseMap
+      {fromOnboarding && (
+        <div className={styles.onboardingBanner}>
+          Showing homes in your range — <strong>{fmt(maxPrice)}</strong> and under. Grayed listings
+          are slightly above your budget.
+        </div>
+      )}
+      <div className={styles.body}>
+        <ListingSidebar
           listings={listings}
-          onViewportChange={handleViewportChange}
+          isLoading={isFetching}
+          maxPrice={maxPrice}
+          onMaxPriceChange={setMaxPrice}
+          minBeds={minBeds}
+          onMinBedsChange={setMinBeds}
         />
-        {!import.meta.env.VITE_MAPBOX_TOKEN && (
-          <div className={styles.tokenWarning}>
-            Add <code>VITE_MAPBOX_TOKEN</code> to your <code>.env</code> to enable the map.
-          </div>
-        )}
+        <div className={styles.mapWrap}>
+          <TouseMap
+            listings={listings}
+            onViewportChange={handleViewportChange}
+            maxPrice={maxPrice}
+          />
+        </div>
       </div>
     </div>
   )

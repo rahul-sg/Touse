@@ -1,7 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import ForecastChart from '../components/ForecastChart'
 import MarketIndicatorsPanel from '../components/MarketIndicatorsPanel'
-import TrendBadge from '../components/TrendBadge'
 import { useForecast } from '../hooks/useForecast'
 import { useMarket } from '../hooks/useMarket'
 import styles from './Forecast.module.css'
@@ -11,14 +10,22 @@ function fmt(n: number | null) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
+function fmtTrend(n: number | null) {
+  if (n == null) return '—'
+  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+}
+
 export default function Forecast() {
   const { metroId } = useParams<{ metroId: string }>()
   const { data: forecast, isLoading: forecastLoading, isError: forecastError } = useForecast(metroId ?? null)
   const { data: market, isLoading: marketLoading } = useMarket(metroId ?? null)
 
   const metroName = metroId
-    ? metroId.replace(/-/g, ' ').replace(/_/g, ' ').replace(/,/g, ',').replace(/\b\w/g, (c) => c.toUpperCase())
+    ? metroId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : ''
+
+  const trend3m = forecast?.trend_3m ?? null
+  const trend12m = forecast?.trend_12m ?? null
 
   return (
     <div className={styles.page}>
@@ -31,24 +38,34 @@ export default function Forecast() {
 
         <h1 className={styles.title}>{metroName || 'Metro Forecast'}</h1>
 
-        {forecast && (
-          <div className={styles.meta}>
-            {forecast.current_median_price != null && (
-              <span className={styles.currentPrice}>
-                Current median: <strong>{fmt(forecast.current_median_price)}</strong>
-              </span>
-            )}
-            {forecast.trained_at && (
-              <span className={styles.trainedAt}>
-                Model trained {new Date(forecast.trained_at).toLocaleDateString()}
-              </span>
-            )}
+        <div className={styles.statShelf}>
+          <div className={styles.statCell}>
+            <p className={styles.statCellLabel}>Median Price</p>
+            <p className={`${styles.statCellValue} ${styles.brass}`}>
+              {fmt(forecast?.current_median_price ?? null)}
+            </p>
           </div>
-        )}
-
-        <div className={styles.badges}>
-          <TrendBadge label="3-Month" value={forecast?.trend_3m ?? null} />
-          <TrendBadge label="12-Month" value={forecast?.trend_12m ?? null} />
+          <div className={styles.statCell}>
+            <p className={styles.statCellLabel}>3-Month Trend</p>
+            <p className={`${styles.statCellValue} ${trend3m == null ? '' : trend3m >= 0 ? styles.up : styles.down}`}>
+              {fmtTrend(trend3m)}
+            </p>
+          </div>
+          <div className={styles.statCell}>
+            <p className={styles.statCellLabel}>12-Month Trend</p>
+            <p className={`${styles.statCellValue} ${trend12m == null ? '' : trend12m >= 0 ? styles.up : styles.down}`}>
+              {fmtTrend(trend12m)}
+            </p>
+          </div>
+          {forecast?.trained_at && (
+            <div className={styles.statCell} style={{ flex: '0 0 auto' }}>
+              <p className={styles.statCellLabel}>Model</p>
+              <p className={styles.statCellSub}>
+                {forecast.model_version ?? '—'}<br />
+                Trained {new Date(forecast.trained_at).toLocaleDateString()}
+              </p>
+            </div>
+          )}
         </div>
       </header>
 

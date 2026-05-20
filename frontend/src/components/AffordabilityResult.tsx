@@ -27,15 +27,13 @@ export default function AffordabilityResult({ result }: Props) {
 
       <div className={styles.breakdown}>
         <StatItem label="Max Loan" value={fmt(result.max_loan)} />
-        <StatItem label="Down Payment" value={fmt(result.down_payment)} />
         <StatItem label="Monthly Payment" value={`${fmt(result.monthly_payment)}/mo`} />
         <StatItem label="Rate Used" value={`${result.rate_used}%`} />
       </div>
 
-      <div className={`${styles.rateAlert} ${rateShiftPositive ? styles.alertUp : styles.alertDown}`}>
-        <span className={styles.rateIcon}>{rateShiftPositive ? '↑' : '↓'}</span>
+      <div className={styles.rateAlert}>
         <p>
-          If rates shift <strong>+0.5%</strong>, your buying power changes by{' '}
+          If rates shift +0.5%, your buying power changes by{' '}
           <strong>{rateShiftLabel}</strong>
         </p>
       </div>

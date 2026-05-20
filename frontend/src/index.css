@@ -1,15 +1,37 @@
 :root {
-  --color-accent: #2563eb;
-  --color-text: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
-  --color-surface: #ffffff;
-  --color-surface-alt: #f9fafb;
-  --color-border: #e5e7eb;
-  --color-error: #dc2626;
-  --color-bg: #f3f4f6;
+  /* Brand palette */
+  --color-forest:   #1C3A2F;   /* deep forest green — primary accent */
+  --color-brass:    #B5935A;   /* aged brass — prices, highlights */
+  --color-brass-lt: #D4AF7A;   /* lighter brass for hover states */
+  --color-stone:    #F8F5F0;   /* warm off-white — page background */
+  --color-cream:    #FAF7F2;   /* result card background */
 
-  font-family: Inter, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  /* Semantic aliases */
+  --color-accent:          var(--color-forest);
+  --color-accent-hover:    #244d3e;
+  --color-text:            #1A1A1A;
+  --color-text-secondary:  #6B6560;
+  --color-text-muted:      #9C9490;
+  --color-surface:         #FFFFFF;
+  --color-surface-alt:     var(--color-cream);
+  --color-border:          #E2DDD8;
+  --color-border-strong:   #C8C2BB;
+  --color-error:           #8B3A3A;
+  --color-bg:              var(--color-stone);
+
+  /* Status */
+  --color-up:      #2D6A4F;
+  --color-up-bg:   #F0F7F4;
+  --color-up-border: #A8D5BE;
+  --color-down:    #8B3A3A;
+  --color-down-bg: #FBF3F3;
+  --color-down-border: #E8B4B4;
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans:  'DM Sans', system-ui, -apple-system, sans-serif;
+
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
   font-weight: 400;

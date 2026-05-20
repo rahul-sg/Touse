@@ -5,6 +5,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.api import affordability, forecast, listings, market, regions
+from app.api import auth
+from app.api import scenarios, rental
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -32,6 +34,9 @@ app.include_router(forecast.router, prefix="/api/v1")
 app.include_router(listings.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
 app.include_router(regions.router, prefix="/api/v1")
+app.include_router(auth.router)
+app.include_router(scenarios.router)
+app.include_router(rental.router)
 
 
 @app.get("/health")

@@ -79,19 +79,19 @@ export default function ForecastChart({ forecast, currentPrice }: Props) {
     <div className={styles.wrap}>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 16 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD8" vertical={false} />
 
           <XAxis
             dataKey="month"
             tickFormatter={fmtMonth}
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={{ fontSize: 11, fill: '#9C9490', fontFamily: 'DM Sans, sans-serif' }}
             tickLine={false}
             axisLine={false}
           />
 
           <YAxis
             tickFormatter={fmtPrice}
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={{ fontSize: 11, fill: '#9C9490', fontFamily: 'DM Sans, sans-serif' }}
             tickLine={false}
             axisLine={false}
             domain={[yMin, yMax]}
@@ -115,8 +115,8 @@ export default function ForecastChart({ forecast, currentPrice }: Props) {
           <Area
             dataKey="band"
             stroke="none"
-            fill="#2563eb"
-            fillOpacity={0.1}
+            fill="#1C3A2F"
+            fillOpacity={0.08}
             name="band"
             legendType="rect"
             activeDot={false}
@@ -125,24 +125,23 @@ export default function ForecastChart({ forecast, currentPrice }: Props) {
           {/* Forecast line */}
           <Line
             dataKey="price"
-            stroke="#2563eb"
+            stroke="#B5935A"
             strokeWidth={2.5}
             dot={false}
             name="price"
             legendType="line"
           />
 
-          {/* Current price reference */}
           {currentPrice && (
             <ReferenceLine
               y={currentPrice}
-              stroke="#9ca3af"
+              stroke="#9C9490"
               strokeDasharray="4 4"
               label={{
                 value: `Now: ${fmtPrice(currentPrice)}`,
                 position: 'insideTopRight',
                 fontSize: 11,
-                fill: '#9ca3af',
+                fill: '#9C9490',
               }}
             />
           )}

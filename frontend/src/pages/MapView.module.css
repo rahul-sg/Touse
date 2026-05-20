@@ -1,25 +1,33 @@
 .page {
   display: flex;
-  height: calc(100vh - 60px); /* subtract navbar height */
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.onboardingBanner {
+  flex-shrink: 0;
+  background: var(--color-forest);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.85rem;
+  padding: 0.625rem 1.5rem;
+  text-align: center;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+.onboardingBanner strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+.body {
+  display: flex;
+  flex: 1;
   overflow: hidden;
 }
 
 .mapWrap {
   flex: 1;
   position: relative;
-}
-
-.tokenWarning {
-  position: absolute;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #fffbeb;
-  border: 1.5px solid #f59e0b;
-  color: #92400e;
-  padding: 0.625rem 1rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }

@@ -1,4 +1,4 @@
-import { Marker } from 'react-map-gl/mapbox'
+import { Marker } from 'react-map-gl/maplibre'
 import styles from './ListingMarker.module.css'
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   count?: number
   onClick: () => void
   isSelected?: boolean
+  isAffordable?: boolean
 }
 
 function fmtPrice(price: number): string {
@@ -16,7 +17,15 @@ function fmtPrice(price: number): string {
   return `$${price}`
 }
 
-export default function ListingMarker({ lat, lng, price, count, onClick, isSelected }: Props) {
+export default function ListingMarker({
+  lat,
+  lng,
+  price,
+  count,
+  onClick,
+  isSelected,
+  isAffordable = true,
+}: Props) {
   const isCluster = count !== undefined
 
   return (
@@ -26,7 +35,9 @@ export default function ListingMarker({ lat, lng, price, count, onClick, isSelec
           <span>{count}</span>
         </div>
       ) : (
-        <div className={`${styles.pin} ${isSelected ? styles.selected : ''}`}>
+        <div
+          className={`${styles.pin} ${isSelected ? styles.selected : ''} ${!isAffordable ? styles.unaffordable : ''}`}
+        >
           <span>{fmtPrice(price ?? 0)}</span>
         </div>
       )}

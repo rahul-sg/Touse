@@ -1,0 +1,359 @@
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { getMe, api } from '../utils/api'
+import { useScenarios, useDeleteScenario } from '../hooks/useScenarios'
+import ScenarioCard from '../components/ScenarioCard'
+import ScenarioForm from '../components/ScenarioForm'
+import type { AffordabilityResult, UserProfile, Scenario } from '../types'
+import styles from './Dashboard.module.css'
+
+// ── Readiness score ──────────────────────────────────────────────────────────
+
+function computeReadinessScore(profile: {
+  annual_income: number
+  savings: number
+  down_payment: number
+  credit_score: number
+  monthly_debt_car: number
+  monthly_debt_student: number
+  monthly_debt_credit: number
+  monthly_debt_other: number
+}): { score: number; actions: string[] } {
+  const grossMonthly = profile.annual_income / 12
+  const totalDebt =
+    profile.monthly_debt_car +
+    profile.monthly_debt_student +
+    profile.monthly_debt_credit +
+    profile.monthly_debt_other
+  const dtiRatio = totalDebt / grossMonthly
+
+  const dtiPts = Math.max(0, Math.round(35 * (1 - dtiRatio / 0.36)))
+
+  const dpPct = profile.down_payment / 450_000
+  const dpPts = Math.min(25, Math.round(25 * dpPct / 0.20))
+
+  const creditPts =
+    profile.credit_score >= 760 ? 25
+    : profile.credit_score >= 700 ? 20
+    : profile.credit_score >= 660 ? 13
+    : profile.credit_score >= 620 ? 7
+    : 3
+
+  const monthlyCost = grossMonthly * 0.60
+  const cushionMonths = profile.savings / monthlyCost
+  const cushionPts = Math.min(15, Math.round(15 * cushionMonths / 6))
+
+  const score = Math.min(100, dtiPts + dpPts + creditPts + cushionPts)
+
+  const actions: string[] = []
+  if (dtiPts < 25) actions.push(`Pay down monthly debt (currently ${Math.round(dtiRatio * 100)}% DTI — aim for <28%)`)
+  if (dpPts < 20) actions.push(`Save more for down payment (${Math.round(dpPct * 100)}% of $450K target — aim for 10–20%)`)
+  if (creditPts < 20) actions.push(`Improve credit score (currently ${profile.credit_score} — aim for 700+)`)
+  if (cushionPts < 10) actions.push(`Build emergency fund (${cushionMonths.toFixed(1)} months — aim for 3–6 months)`)
+
+  return { score, actions: actions.slice(0, 3) }
+}
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+function fmtRate(r: number) {
+  return `${r.toFixed(2)}%`
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const { user, isLoggedIn } = useAuth()
+  const navigate = useNavigate()
+
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [result, setResult] = useState<AffordabilityResult | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [calcError, setCalcError] = useState(false)
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'scenarios'>('overview')
+  const [activeScenarioId, setActiveScenarioId] = useState<number | null>(null)
+  const [showForm, setShowForm] = useState(false)
+
+  const userId = user?.user_id
+  const { data: scenarios = [], refetch: refetchScenarios } = useScenarios(userId)
+  const deleteMutation = useDeleteScenario(userId ?? 0)
+
+  useEffect(() => {
+    if (!isLoggedIn || !user) {
+      navigate('/login')
+      return
+    }
+
+    let cancelled = false
+
+    async function load() {
+      setIsLoading(true)
+      try {
+        const me: UserProfile = await getMe(user!.user_id)
+        if (cancelled) return
+        setProfile(me)
+
+        if (
+          me.annual_income != null &&
+          me.savings != null &&
+          me.down_payment != null &&
+          me.credit_score != null &&
+          me.zip_code
+        ) {
+          const monthlyDebt =
+            (me.monthly_debt_car ?? 0) +
+            (me.monthly_debt_student ?? 0) +
+            (me.monthly_debt_credit ?? 0) +
+            (me.monthly_debt_other ?? 0)
+
+          try {
+            const { data: aff } = await api.post<AffordabilityResult>('/api/v1/affordability', {
+              annual_income: me.annual_income,
+              savings: me.savings,
+              monthly_debt: monthlyDebt,
+              credit_score: me.credit_score,
+              down_payment: me.down_payment,
+              zip_code: me.zip_code,
+            })
+            if (!cancelled) setResult(aff)
+          } catch {
+            if (!cancelled) setCalcError(true)
+          }
+        }
+      } catch {
+        // Profile not yet set up
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [isLoggedIn, user, navigate])
+
+  const hasProfile =
+    profile != null &&
+    profile.annual_income != null &&
+    profile.zip_code != null
+
+  const firstName = user?.first_name ?? 'there'
+
+  const readiness =
+    hasProfile && profile!.annual_income != null
+      ? computeReadinessScore({
+          annual_income: profile!.annual_income!,
+          savings: profile!.savings ?? 0,
+          down_payment: profile!.down_payment ?? 0,
+          credit_score: profile!.credit_score ?? 620,
+          monthly_debt_car: profile!.monthly_debt_car,
+          monthly_debt_student: profile!.monthly_debt_student,
+          monthly_debt_credit: profile!.monthly_debt_credit,
+          monthly_debt_other: profile!.monthly_debt_other,
+        })
+      : null
+
+  function handleDelete(scenarioId: number) {
+    deleteMutation.mutate(scenarioId, {
+      onSuccess: () => {
+        if (activeScenarioId === scenarioId) setActiveScenarioId(null)
+      },
+    })
+  }
+
+  function handleScenarioCreated(s: Scenario) {
+    setActiveScenarioId(s.id)
+    refetchScenarios()
+  }
+
+  const previewScenarios = scenarios.slice(0, 3)
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        {/* Greeting */}
+        <h1 className={styles.greeting}>Welcome back, {firstName}.</h1>
+        <p className={styles.greetingSub}>Here's a snapshot of your home buying picture.</p>
+
+        {/* Tab row */}
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tabBtn} ${activeTab === 'overview' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            className={`${styles.tabBtn} ${activeTab === 'scenarios' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('scenarios')}
+          >
+            My Scenarios
+          </button>
+        </div>
+
+        {/* ── OVERVIEW TAB ── */}
+        {activeTab === 'overview' && (
+          <div className={styles.mainLayout}>
+            {/* Left column */}
+            <div>
+              {isLoading && (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  Loading your profile…
+                </div>
+              )}
+
+              {!isLoading && hasProfile && result && !calcError && (
+                <div className={styles.statShelf}>
+                  <div className={styles.statCell}>
+                    <span className={styles.statLabel}>Max purchase price</span>
+                    <span className={styles.statValue}>{fmt(result.max_price)}</span>
+                    <span className={styles.statSub}>Based on current rates</span>
+                  </div>
+                  <div className={styles.statCell}>
+                    <span className={styles.statLabel}>Est. monthly payment</span>
+                    <span className={styles.statValue}>{fmt(result.monthly_payment)}</span>
+                    <span className={styles.statSub}>Principal &amp; interest</span>
+                  </div>
+                  <div className={styles.statCell}>
+                    <span className={styles.statLabel}>Rate used</span>
+                    <span className={styles.statValue}>{fmtRate(result.rate_used)}</span>
+                    <span className={styles.statSub}>Current 30-yr fixed</span>
+                  </div>
+                </div>
+              )}
+
+              {!isLoading && !hasProfile && (
+                <div className={styles.noProfile}>
+                  <h2 className={styles.noProfileTitle}>Complete your financial profile</h2>
+                  <p className={styles.noProfileText}>
+                    Add your income, savings, and debt to see your real home buying budget and browse
+                    listings in your range.
+                  </p>
+                  <Link to="/onboarding" className={styles.noProfileBtn}>
+                    Complete my profile →
+                  </Link>
+                </div>
+              )}
+
+              {/* Quick actions */}
+              <div className={styles.quickActions}>
+                <Link to="/map" className={styles.actionCard}>
+                  <span className={styles.actionIcon}>🗺</span>
+                  <span className={styles.actionLabel}>Browse the map</span>
+                </Link>
+                <Link to="/forecast/austin-tx" className={styles.actionCard}>
+                  <span className={styles.actionIcon}>📈</span>
+                  <span className={styles.actionLabel}>Market forecast</span>
+                </Link>
+                <button
+                  className={styles.actionCard}
+                  onClick={() => setShowForm(true)}
+                >
+                  <span className={styles.actionIcon}>＋</span>
+                  <span className={styles.actionLabel}>Add scenario</span>
+                </button>
+              </div>
+
+              {/* Preview scenarios */}
+              <div className={styles.scenariosSection}>
+                <h2 className={styles.sectionTitle}>Your Scenarios</h2>
+                {scenarios.length === 0 ? (
+                  <p className={styles.emptyState}>
+                    Save different financial scenarios to compare what you could afford.
+                  </p>
+                ) : (
+                  <div className={styles.scenarioGrid}>
+                    {previewScenarios.map(s => (
+                      <ScenarioCard
+                        key={s.id}
+                        scenario={s}
+                        isActive={activeScenarioId === s.id}
+                        onSelect={() => setActiveScenarioId(s.id)}
+                        onDelete={() => handleDelete(s.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {scenarios.length > 3 && (
+                  <button
+                    className={styles.seeAllBtn}
+                    onClick={() => setActiveTab('scenarios')}
+                  >
+                    See all {scenarios.length} scenarios →
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Right column — Readiness score */}
+            {readiness && (
+              <div className={styles.scorePanel}>
+                <p className={styles.scoreTitle}>Readiness Score</p>
+                <div
+                  className={styles.scoreRing}
+                  style={{ '--score-pct': readiness.score } as React.CSSProperties}
+                >
+                  <span className={styles.scoreNumber}>{readiness.score}</span>
+                </div>
+                {readiness.actions.length > 0 && (
+                  <div className={styles.actionItems}>
+                    {readiness.actions.map((a, i) => (
+                      <div key={i} className={styles.actionItem}>{a}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MY SCENARIOS TAB ── */}
+        {activeTab === 'scenarios' && (
+          <div>
+            <div className={styles.scenariosHeader}>
+              <h2 className={styles.sectionTitle}>My Scenarios</h2>
+              <button
+                className={styles.newScenarioBtn}
+                onClick={() => setShowForm(true)}
+              >
+                New scenario +
+              </button>
+            </div>
+
+            {scenarios.length === 0 ? (
+              <p className={styles.emptyState}>
+                No scenarios yet. Create one to start comparing your options.
+              </p>
+            ) : (
+              <div className={styles.scenarioGrid}>
+                {scenarios.map(s => (
+                  <ScenarioCard
+                    key={s.id}
+                    scenario={s}
+                    isActive={activeScenarioId === s.id}
+                    onSelect={() => setActiveScenarioId(s.id)}
+                    onDelete={() => handleDelete(s.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Scenario form modal */}
+      {showForm && userId != null && (
+        <ScenarioForm
+          userId={userId}
+          onClose={() => setShowForm(false)}
+          onCreated={handleScenarioCreated}
+        />
+      )}
+    </div>
+  )
+}

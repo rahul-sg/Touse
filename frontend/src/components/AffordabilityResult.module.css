@@ -1,106 +1,102 @@
 .card {
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  border-radius: 12px;
+  background: var(--color-cream);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
   overflow: hidden;
-  animation: slideIn 0.25s ease;
+  animation: slideIn 0.3s ease;
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Price hero ──────────────────────────────────────── */
 .hero {
-  background: var(--color-accent);
-  color: #fff;
-  padding: 2rem;
-  text-align: center;
+  padding: 2rem 2rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .heroLabel {
-  margin: 0 0 0.25rem;
-  font-size: 0.875rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.85;
+  letter-spacing: 0.1em;
+  color: var(--color-text-secondary);
 }
 
 .heroPrice {
   margin: 0;
-  font-size: 2.75rem;
+  font-family: var(--font-serif);
+  font-size: 3rem;
   font-weight: 700;
+  color: var(--color-brass);
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .heroSub {
   margin: 0.5rem 0 0;
-  font-size: 0.9rem;
-  opacity: 0.85;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
 }
 
+/* ── Breakdown stats ─────────────────────────────────── */
 .breakdown {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0;
-  border-bottom: 1.5px solid var(--color-border);
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .statItem {
-  padding: 1rem 1.5rem;
-  border-right: 1.5px solid var(--color-border);
-  border-bottom: 1.5px solid var(--color-border);
+  padding: 1rem 1.25rem;
+  border-right: 1px solid var(--color-border);
 }
 
-.statItem:nth-child(even) {
+.statItem:last-child {
   border-right: none;
 }
 
-.statItem:nth-last-child(-n+2) {
-  border-bottom: none;
-}
-
 .statLabel {
-  margin: 0 0 0.25rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.2rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-secondary);
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
 }
 
 .statValue {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--color-text);
 }
 
+/* ── Rate alert (pull-quote style) ──────────────────── */
 .rateAlert {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  font-size: 0.875rem;
+  padding: 1rem 1.25rem 1rem 1.5rem;
+  border-left: 3px solid var(--color-brass);
+  margin: 1.25rem 1.25rem;
+  background: transparent;
 }
 
 .rateAlert p {
   margin: 0;
+  font-size: 0.875rem;
+  font-style: italic;
   color: var(--color-text-secondary);
+  line-height: 1.5;
 }
 
-.alertDown {
-  background: #fff5f5;
+.rateAlert p strong {
+  font-style: normal;
+  color: var(--color-text);
 }
 
-.alertUp {
-  background: #f0fdf4;
+@media (max-width: 520px) {
+  .breakdown { grid-template-columns: 1fr 1fr; }
+  .statItem:nth-child(2) { border-right: none; }
+  .heroPrice { font-size: 2.25rem; }
 }
-
-.rateIcon {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.alertDown .rateIcon { color: #e53e3e; }
-.alertUp .rateIcon   { color: #38a169; }

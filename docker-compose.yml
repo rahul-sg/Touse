@@ -72,6 +72,8 @@ services:
       - POSTGRES_USER=touse
       - POSTGRES_PASSWORD=touse
       - POSTGRES_DB=touse
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

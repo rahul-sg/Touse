@@ -1,0 +1,82 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1rem 1.125rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.card:hover { border-color: var(--color-forest); }
+.active {
+  border-color: var(--color-forest);
+  box-shadow: 0 0 0 2px rgba(28,58,47,0.10);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.name {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.badgeBuy { background: rgba(28,58,47,0.10); color: var(--color-forest); }
+.badgeRent { background: rgba(45,106,106,0.10); color: #2D6A6A; }
+.price {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-brass);
+  margin: 0;
+  line-height: 1;
+}
+.priceEmpty {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+}
+.location {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--color-border);
+}
+.viewBtn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-forest);
+  text-decoration: none;
+}
+.viewBtn:hover { text-decoration: underline; }
+.deleteBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.deleteBtn:hover { color: #8B3A3A; }

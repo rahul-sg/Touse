@@ -25,7 +25,12 @@ export default function ListingSidebar({
   return (
     <aside className={styles.sidebar}>
       <div className={styles.filters}>
-        <h2 className={styles.heading}>Listings</h2>
+        <h2 className={styles.heading}>
+          Listings
+          {listings.length > 0 && (
+            <span className={styles.resultCount}>{listings.length} in range</span>
+          )}
+        </h2>
 
         <div className={styles.filterRow}>
           <label className={styles.filterLabel}>Max Price</label>
@@ -75,21 +80,27 @@ export default function ListingSidebar({
 
         {!isLoading && listings.map((l) => (
           <div key={l.id} className={styles.card}>
-            <div className={styles.cardTop}>
+            {(l as any).photo_url
+              ? <img src={(l as any).photo_url} alt={l.address} className={styles.cardPhoto} loading="lazy" />
+              : <div className={styles.cardPhotoPlaceholder}>No photo</div>
+            }
+            <div className={styles.cardBody}>
               <span className={styles.cardPrice}>{fmt(l.price)}</span>
-              <span className={styles.cardBeds}>{l.beds} bd · {l.baths ?? '—'} ba</span>
+              <p className={styles.cardMeta}>
+                {l.beds ?? '—'} bd &nbsp;·&nbsp; {l.baths ?? '—'} ba
+              </p>
+              <p className={styles.cardAddress}>{l.address}</p>
+              {l.listing_url && l.listing_url !== '#' && (
+                <a
+                  className={styles.cardLink}
+                  href={l.listing_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View listing ↗
+                </a>
+              )}
             </div>
-            <p className={styles.cardAddress}>{l.address}</p>
-            {l.listing_url && l.listing_url !== '#' && (
-              <a
-                className={styles.cardLink}
-                href={l.listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View →
-              </a>
-            )}
           </div>
         ))}
       </div>

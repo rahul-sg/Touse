@@ -8,8 +8,19 @@ from sqlalchemy.dialects.postgresql import insert
 from app.models.listing import ListingCache
 
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
-RAPIDAPI_HOST = "realty-in-us.p.rapidapi.com"
+RAPIDAPI_HOST = "realty-us.p.rapidapi.com"
 CACHE_TTL_HOURS = 6
+
+
+def _bbox_polygon(lat: float, lng: float, radius_miles: float) -> list[list[float]]:
+    """Convert a center point + radius into a closed bounding box polygon [lng, lat]."""
+    import math
+    lat_delta = radius_miles / 69.0
+    lng_delta = radius_miles / (69.0 * math.cos(math.radians(lat)))
+    n, s = lat + lat_delta, lat - lat_delta
+    e, w = lng + lng_delta, lng - lng_delta
+    # Closed polygon: 5 points, GeoJSON order [lng, lat]
+    return [[w, n], [e, n], [e, s], [w, s], [w, n]]
 
 
 async def _fetch_from_rapidapi(
@@ -20,43 +31,49 @@ async def _fetch_from_rapidapi(
         "x-rapidapi-host": RAPIDAPI_HOST,
         "Content-Type": "application/json",
     }
-    payload = {
-        "limit": 42,
-        "offset": 0,
-        "postal_code": None,
-        "radius": radius_miles,
-        "status": ["for_sale"],
-        "sold_date_max": None,
-        "price_max": int(max_price),
-        "beds_min": min_beds,
-        "sort": {"direction": "desc", "field": "list_date"},
-        "location": {"longitude": lng, "latitude": lat},
-    }
-    async with httpx.AsyncClient(timeout=10) as client:
+    payload = {"coordinates": _bbox_polygon(lat, lng, radius_miles)}
+    async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
-            "https://realty-in-us.p.rapidapi.com/properties/v3/list",
+            f"https://{RAPIDAPI_HOST}/properties/coords/search-buy",
             headers=headers,
+            params={"sortBy": "relevance"},
             json=payload,
         )
         resp.raise_for_status()
         data = resp.json()
 
+    # Response: {"data": {"count": N, "total": N, "results": [...]}, ...}
+    results = (data.get("data") or {}).get("results") or []
     listings = []
-    for prop in data.get("data", {}).get("home_search", {}).get("results", []):
-        loc = prop.get("location", {}).get("address", {})
-        coord = prop.get("location", {}).get("coordinate", {})
-        detail = prop.get("list_price"), prop.get("description", {})
+    for prop in results:
+        loc = prop.get("location", {})
+        address = loc.get("address", {})
+        coord = loc.get("coordinate", {})
+        desc = prop.get("description", {})
+        price = prop.get("list_price") or 0
+        photo = (prop.get("primary_photo") or {}).get("href", "")
+
+        prop_lat = coord.get("lat") or lat
+        prop_lng = coord.get("lon") or lng
+
+        line = address.get("line", "")
+        city = address.get("city", "")
+        state = address.get("state_code", "")
+        zipcode = address.get("postal_code", "")
+        full_address = f"{line}, {city}, {state} {zipcode}".strip(", ")
+
         listings.append({
-            "external_id": prop.get("property_id", ""),
+            "external_id": str(prop.get("property_id") or ""),
             "source": "rapidapi",
-            "address": f"{loc.get('line', '')}, {loc.get('city', '')}, {loc.get('state_code', '')} {loc.get('postal_code', '')}",
-            "price": float(prop.get("list_price") or 0),
-            "beds": detail[1].get("beds"),
-            "baths": detail[1].get("baths"),
-            "lat": float(coord.get("lat") or lat),
-            "lng": float(coord.get("lon") or lng),
-            "zip_code": loc.get("postal_code"),
-            "listing_url": f"https://www.realtor.com/realestateandhomes-detail/{prop.get('permalink', '')}",
+            "address": full_address,
+            "price": float(price),
+            "beds": desc.get("beds"),
+            "baths": desc.get("baths_consolidated") or desc.get("baths"),
+            "lat": float(prop_lat),
+            "lng": float(prop_lng),
+            "zip_code": zipcode,
+            "listing_url": prop.get("href") or f"https://www.realtor.com/realestateandhomes-detail/{prop.get('property_id','')}",
+            "photo_url": photo,
             "fetched_at": datetime.utcnow(),
         })
     return listings
@@ -134,6 +151,7 @@ async def get_listings(
                 "lat": float(c.lat),
                 "lng": float(c.lng),
                 "listing_url": c.listing_url,
+                "photo_url": getattr(c, "photo_url", None),
             }
             for c in cached
         ]
@@ -151,6 +169,7 @@ async def get_listings(
             "lat": r["lat"],
             "lng": r["lng"],
             "listing_url": r["listing_url"],
+            "photo_url": r.get("photo_url"),
         }
         for r in raw
     ]

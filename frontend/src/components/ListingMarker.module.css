@@ -29,14 +29,14 @@
 }
 
 .selected {
-  background: #1d4ed8;
+  background: var(--color-brass);
   transform: scale(1.12);
   box-shadow: 0 4px 14px rgba(0,0,0,0.35);
   z-index: 10;
 }
 
 .selected::after {
-  border-top-color: #1d4ed8;
+  border-top-color: var(--color-brass);
 }
 
 .cluster {
@@ -58,4 +58,18 @@
 
 .cluster:hover {
   transform: scale(1.1);
+}
+
+.unaffordable {
+  background: rgba(156, 148, 144, 0.75);
+  opacity: 0.8;
+}
+
+.unaffordable::after {
+  border-top-color: rgba(156, 148, 144, 0.75);
+}
+
+.unaffordable:hover {
+  background: rgba(156, 148, 144, 0.9);
+  opacity: 0.9;
 }

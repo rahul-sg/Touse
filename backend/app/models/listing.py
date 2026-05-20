@@ -21,4 +21,5 @@ class ListingCache(Base):
     lng: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
     zip_code: Mapped[str | None] = mapped_column(String(10), index=True)
     listing_url: Mapped[str | None] = mapped_column(String(1024))
+    photo_url: Mapped[str | None] = mapped_column(String(1024))
     fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

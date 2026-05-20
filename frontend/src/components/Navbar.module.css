@@ -2,8 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  height: 60px;
+  padding: 0 2.5rem;
+  height: 64px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
   position: sticky;
@@ -12,27 +12,88 @@
 }
 
 .brand {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-accent);
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-forest);
   text-decoration: none;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+}
+
+.brand:hover {
+  text-decoration: none;
+  color: var(--color-forest);
 }
 
 .links {
   display: flex;
-  gap: 1.5rem;
+  gap: 2rem;
+  align-items: center;
 }
 
 .links a {
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 500;
+  letter-spacing: 0.02em;
   transition: color 0.15s;
 }
 
-.links a:hover,
-.links a.active {
+.links a:hover {
   color: var(--color-text);
+  text-decoration: none;
+}
+
+.links a.active {
+  color: var(--color-forest);
+  font-weight: 600;
+  position: relative;
+}
+
+.links a.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-brass);
+  border-radius: 1px;
+}
+
+.signOutBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.875rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.signOutBtn:hover {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
+}
+
+.signInBtn {
+  padding: 0.35rem 0.875rem;
+  border: 1px solid var(--color-forest);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-forest);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.signInBtn:hover {
+  background: var(--color-forest);
+  color: #fff;
+  text-decoration: none;
 }
