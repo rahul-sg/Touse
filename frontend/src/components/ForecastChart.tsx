@@ -1,0 +1,153 @@
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceLine,
+} from 'recharts'
+import type { ForecastPoint } from '../types'
+import styles from './ForecastChart.module.css'
+
+interface Props {
+  forecast: ForecastPoint[]
+  currentPrice: number | null
+}
+
+function fmtPrice(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
+  return `$${Math.round(n / 1000)}K`
+}
+
+function fmtMonth(m: string) {
+  const [year, month] = m.split('-')
+  return new Date(Number(year), Number(month) - 1).toLocaleDateString('en-US', {
+    month: 'short',
+    year: '2-digit',
+  })
+}
+
+// Custom tooltip
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const price = payload.find((p: any) => p.dataKey === 'price')?.value
+  const lower = payload.find((p: any) => p.dataKey === 'lower')?.value
+  const upper = payload.find((p: any) => p.dataKey === 'upper')?.value
+  return (
+    <div className={styles.tooltip}>
+      <p className={styles.tooltipMonth}>{fmtMonth(label)}</p>
+      {price != null && <p className={styles.tooltipPrice}>{fmtPrice(price)}</p>}
+      {lower != null && upper != null && (
+        <p className={styles.tooltipRange}>
+          Range: {fmtPrice(lower)} – {fmtPrice(upper)}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export default function ForecastChart({ forecast, currentPrice }: Props) {
+  if (!forecast.length) {
+    return (
+      <div className={styles.empty}>
+        <p>Forecast model not yet trained for this metro.</p>
+        <p className={styles.emptyHint}>
+          Run <code>python3 -m app.ml.train_prophet --all</code> after the Zillow ETL loads data.
+        </p>
+      </div>
+    )
+  }
+
+  // Build chart data — band uses [lower, upper] area trick
+  const data = forecast.map((p) => ({
+    month: p.month,
+    price: p.price,
+    band: [p.lower, p.upper] as [number, number],
+    lower: p.lower,
+    upper: p.upper,
+  }))
+
+  const allPrices = forecast.flatMap((p) => [p.lower, p.upper, p.price])
+  const yMin = Math.floor(Math.min(...allPrices) * 0.97 / 10000) * 10000
+  const yMax = Math.ceil(Math.max(...allPrices) * 1.03 / 10000) * 10000
+
+  return (
+    <div className={styles.wrap}>
+      <ResponsiveContainer width="100%" height={320}>
+        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 16 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+
+          <XAxis
+            dataKey="month"
+            tickFormatter={fmtMonth}
+            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tickLine={false}
+            axisLine={false}
+          />
+
+          <YAxis
+            tickFormatter={fmtPrice}
+            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tickLine={false}
+            axisLine={false}
+            domain={[yMin, yMax]}
+            width={64}
+          />
+
+          <Tooltip content={<ChartTooltip />} />
+
+          <Legend
+            formatter={(value) =>
+              value === 'price'
+                ? 'Forecast'
+                : value === 'band'
+                ? '80% Confidence Range'
+                : value
+            }
+            wrapperStyle={{ fontSize: 12 }}
+          />
+
+          {/* Confidence band */}
+          <Area
+            dataKey="band"
+            stroke="none"
+            fill="#2563eb"
+            fillOpacity={0.1}
+            name="band"
+            legendType="rect"
+            activeDot={false}
+          />
+
+          {/* Forecast line */}
+          <Line
+            dataKey="price"
+            stroke="#2563eb"
+            strokeWidth={2.5}
+            dot={false}
+            name="price"
+            legendType="line"
+          />
+
+          {/* Current price reference */}
+          {currentPrice && (
+            <ReferenceLine
+              y={currentPrice}
+              stroke="#9ca3af"
+              strokeDasharray="4 4"
+              label={{
+                value: `Now: ${fmtPrice(currentPrice)}`,
+                position: 'insideTopRight',
+                fontSize: 11,
+                fill: '#9ca3af',
+              }}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
