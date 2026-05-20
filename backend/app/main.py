@@ -6,7 +6,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api import affordability, forecast, listings, market, regions
 from app.api import auth
-from app.api import scenarios, rental
+from app.api import scenarios, rental, readiness
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -17,6 +17,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 _ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
     "https://touse.app",
     "https://www.touse.app",
 ]
@@ -37,6 +39,7 @@ app.include_router(regions.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(scenarios.router)
 app.include_router(rental.router)
+app.include_router(readiness.router)
 
 
 @app.get("/health")

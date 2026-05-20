@@ -43,12 +43,19 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
 
       <div className={styles.actions}>
         <Link
-          to="/map"
-          state={{ maxPrice: scenario.cached_max_price, scenarioId: scenario.id }}
+          to={`/scenarios/${scenario.id}`}
           className={styles.viewBtn}
           onClick={e => e.stopPropagation()}
         >
-          View homes →
+          View details →
+        </Link>
+        <Link
+          to="/map"
+          state={{ maxPrice: scenario.cached_max_price, scenarioId: scenario.id, scenarioName: scenario.name }}
+          className={styles.mapBtn}
+          onClick={e => e.stopPropagation()}
+        >
+          Map
         </Link>
         <button
           className={styles.deleteBtn}

@@ -70,6 +70,21 @@
   text-decoration: none;
 }
 .viewBtn:hover { text-decoration: underline; }
+.mapBtn {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 0.2rem 0.5rem;
+  transition: all 0.15s;
+}
+.mapBtn:hover {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
+  text-decoration: none;
+}
 .deleteBtn {
   background: none;
   border: none;

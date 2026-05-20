@@ -10,6 +10,7 @@ import MapView from './pages/MapView'
 import Forecast from './pages/Forecast'
 import About from './pages/About'
 import Scenarios from './pages/Scenarios'
+import ScenarioDetail from './pages/ScenarioDetail'
 
 const queryClient = new QueryClient()
 
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/forecast/:metroId" element={<Forecast />} />
             <Route path="/about" element={<About />} />
             <Route path="/scenarios" element={<Scenarios />} />
+            <Route path="/scenarios/:id" element={<ScenarioDetail />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

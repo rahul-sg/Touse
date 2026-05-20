@@ -1,0 +1,467 @@
+.page {
+  min-height: calc(100vh - 64px);
+  background: var(--color-stone);
+  padding: 2.5rem 2rem 4rem;
+}
+
+.inner {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.backLink {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  transition: color 0.15s;
+}
+
+.backLink:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.375rem;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.badgeBuy {
+  background: rgba(28, 58, 47, 0.1);
+  color: var(--color-forest);
+}
+
+.badgeRent {
+  background: rgba(45, 106, 106, 0.12);
+  color: #2D6A6A;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.maxPrice {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.maxPriceLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.maxPriceVal {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-brass);
+  line-height: 1;
+}
+
+.maxPriceSub {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Layout ── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 2rem;
+  align-items: start;
+}
+
+/* ── Left column ── */
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Summary card ── */
+.summaryCard {
+  background: var(--color-forest);
+  border-radius: 4px;
+  padding: 1.75rem 2rem;
+}
+
+.summaryEyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  margin: 0 0 0.75rem;
+}
+
+.summaryText {
+  font-size: 0.92rem;
+  color: rgba(255,255,255,0.9);
+  line-height: 1.75;
+  margin: 0;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1.75rem 2rem;
+}
+
+.cardTitle {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 1.25rem;
+}
+
+/* ── Breakdown ── */
+.breakdownGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.breakdownItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.breakdownLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.breakdownVal {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.creditLabel {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* ── Debt ── */
+.debtTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.debtGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.debtItem {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  padding: 0.3rem 0;
+}
+
+.debtTotal {
+  border-top: 1px solid var(--color-border);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Map button ── */
+.mapBtn {
+  padding: 0.875rem 2rem;
+  background: var(--color-brass);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: background 0.15s;
+  align-self: flex-start;
+}
+
+.mapBtn:hover {
+  background: #a07d47;
+}
+
+/* ── Score panel ── */
+.scorePanel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  position: sticky;
+  top: 80px;
+}
+
+.scorePanelTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ── Score ring ── */
+.scoreRing {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--score-color, var(--color-forest)) calc(var(--score-pct) * 1%),
+    var(--color-border) 0
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scoreInner {
+  width: 108px;
+  height: 108px;
+  background: var(--color-surface);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.scoreNumber {
+  font-family: var(--font-serif);
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.scoreOf {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* ── Score breakdown bars ── */
+.scoreBreakdown {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.scoreRow {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.scoreRowLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.scoreBar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.scoreBarFill {
+  height: 100%;
+  background: var(--color-forest);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.scoreRowPts {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rateNote {
+  font-size: 0.72rem;
+  color: var(--color-brass);
+  font-style: italic;
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
+/* ── Action items ── */
+.actionItems {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.actionTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 0.25rem;
+}
+
+.actionItem {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.actionBullet {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  background: rgba(28,58,47,0.1);
+  color: var(--color-forest);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-top: 0.05rem;
+}
+
+/* ── Loading / not found ── */
+.loadingState {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 4rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-forest);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.notFound {
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.notFound h2 {
+  font-family: var(--font-serif);
+  margin: 0 0 1rem;
+  color: var(--color-text);
+}
+
+.notFound a {
+  color: var(--color-forest);
+  font-weight: 500;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .scorePanel {
+    position: static;
+  }
+
+  .maxPrice {
+    text-align: left;
+  }
+}
+
+@media (max-width: 600px) {
+  .breakdownGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}

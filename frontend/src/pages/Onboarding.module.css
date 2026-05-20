@@ -158,6 +158,19 @@
   line-height: 1.4;
 }
 
+.optionalLabel {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.fieldHint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
 .error {
   font-size: 0.75rem;
   color: var(--color-error);

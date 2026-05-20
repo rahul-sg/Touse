@@ -12,6 +12,7 @@ export interface RegisterPayload {
   email: string
   username: string
   password: string
+  target_zip?: string
 }
 
 export interface ProfilePayload {
@@ -32,6 +33,39 @@ export interface AuthResponse {
   user_id: number
   username: string
   first_name: string
+  target_zip: string | null
+}
+
+export interface ReadinessRequest {
+  annual_income: number
+  savings?: number
+  down_payment?: number
+  credit_score?: number
+  monthly_debt_car?: number
+  monthly_debt_student?: number
+  monthly_debt_credit?: number
+  monthly_debt_other?: number
+  cached_max_price?: number
+  rate_used?: number
+  liquid_savings?: number
+}
+
+export interface ReadinessResult {
+  score: number
+  components: {
+    dti_pts: number
+    dp_pts: number
+    credit_pts: number
+    cushion_pts: number
+  }
+  dti_ratio_pct: number
+  dti_ceiling_pct: number
+  dp_pct: number
+  cushion_months: number
+  credit_label: string
+  rate_used: number
+  target_price: number
+  actions: string[]
 }
 
 export async function register(payload: RegisterPayload): Promise<AuthResponse> {
@@ -87,6 +121,15 @@ export async function updateScenario(scenarioId: number, payload: Partial<Scenar
 
 export async function deleteScenario(scenarioId: number): Promise<void> {
   await api.delete(`/api/v1/scenarios/${scenarioId}`)
+}
+
+export async function getReadiness(payload: ReadinessRequest): Promise<ReadinessResult> {
+  const { data } = await api.post<ReadinessResult>('/api/v1/readiness', payload)
+  return data
+}
+
+export async function setTargetZip(userId: number, targetZip: string | null): Promise<void> {
+  await api.patch(`/api/v1/auth/target-zip/${userId}`, { target_zip: targetZip })
 }
 
 export async function getRentalAffordability(payload: {

@@ -1,59 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getMe, api } from '../utils/api'
+import { getMe, api, getReadiness } from '../utils/api'
 import { useScenarios, useDeleteScenario } from '../hooks/useScenarios'
 import ScenarioCard from '../components/ScenarioCard'
 import ScenarioForm from '../components/ScenarioForm'
-import type { AffordabilityResult, UserProfile, Scenario } from '../types'
+import type { AffordabilityResult, UserProfile, Scenario, ReadinessResult } from '../types'
 import styles from './Dashboard.module.css'
-
-// ── Readiness score ──────────────────────────────────────────────────────────
-
-function computeReadinessScore(profile: {
-  annual_income: number
-  savings: number
-  down_payment: number
-  credit_score: number
-  monthly_debt_car: number
-  monthly_debt_student: number
-  monthly_debt_credit: number
-  monthly_debt_other: number
-}): { score: number; actions: string[] } {
-  const grossMonthly = profile.annual_income / 12
-  const totalDebt =
-    profile.monthly_debt_car +
-    profile.monthly_debt_student +
-    profile.monthly_debt_credit +
-    profile.monthly_debt_other
-  const dtiRatio = totalDebt / grossMonthly
-
-  const dtiPts = Math.max(0, Math.round(35 * (1 - dtiRatio / 0.36)))
-
-  const dpPct = profile.down_payment / 450_000
-  const dpPts = Math.min(25, Math.round(25 * dpPct / 0.20))
-
-  const creditPts =
-    profile.credit_score >= 760 ? 25
-    : profile.credit_score >= 700 ? 20
-    : profile.credit_score >= 660 ? 13
-    : profile.credit_score >= 620 ? 7
-    : 3
-
-  const monthlyCost = grossMonthly * 0.60
-  const cushionMonths = profile.savings / monthlyCost
-  const cushionPts = Math.min(15, Math.round(15 * cushionMonths / 6))
-
-  const score = Math.min(100, dtiPts + dpPts + creditPts + cushionPts)
-
-  const actions: string[] = []
-  if (dtiPts < 25) actions.push(`Pay down monthly debt (currently ${Math.round(dtiRatio * 100)}% DTI — aim for <28%)`)
-  if (dpPts < 20) actions.push(`Save more for down payment (${Math.round(dpPct * 100)}% of $450K target — aim for 10–20%)`)
-  if (creditPts < 20) actions.push(`Improve credit score (currently ${profile.credit_score} — aim for 700+)`)
-  if (cushionPts < 10) actions.push(`Build emergency fund (${cushionMonths.toFixed(1)} months — aim for 3–6 months)`)
-
-  return { score, actions: actions.slice(0, 3) }
-}
 
 // ── Formatters ───────────────────────────────────────────────────────────────
 
@@ -72,6 +25,7 @@ export default function Dashboard() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [result, setResult] = useState<AffordabilityResult | null>(null)
+  const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [calcError, setCalcError] = useState(false)
 
@@ -120,7 +74,25 @@ export default function Dashboard() {
               down_payment: me.down_payment,
               zip_code: me.zip_code,
             })
-            if (!cancelled) setResult(aff)
+            if (!cancelled) {
+              setResult(aff)
+              // Fetch backend readiness score using the actual rate + max price
+              try {
+                const r = await getReadiness({
+                  annual_income: me.annual_income!,
+                  savings: me.savings ?? 0,
+                  down_payment: me.down_payment ?? 0,
+                  credit_score: me.credit_score ?? 620,
+                  monthly_debt_car: me.monthly_debt_car,
+                  monthly_debt_student: me.monthly_debt_student,
+                  monthly_debt_credit: me.monthly_debt_credit,
+                  monthly_debt_other: me.monthly_debt_other,
+                  cached_max_price: aff.max_price,
+                  rate_used: aff.rate_used,
+                })
+                if (!cancelled) setReadiness(r)
+              } catch { /* readiness is optional — don't block dashboard */ }
+            }
           } catch {
             if (!cancelled) setCalcError(true)
           }
@@ -143,19 +115,6 @@ export default function Dashboard() {
 
   const firstName = user?.first_name ?? 'there'
 
-  const readiness =
-    hasProfile && profile!.annual_income != null
-      ? computeReadinessScore({
-          annual_income: profile!.annual_income!,
-          savings: profile!.savings ?? 0,
-          down_payment: profile!.down_payment ?? 0,
-          credit_score: profile!.credit_score ?? 620,
-          monthly_debt_car: profile!.monthly_debt_car,
-          monthly_debt_student: profile!.monthly_debt_student,
-          monthly_debt_credit: profile!.monthly_debt_credit,
-          monthly_debt_other: profile!.monthly_debt_other,
-        })
-      : null
 
   function handleDelete(scenarioId: number) {
     deleteMutation.mutate(scenarioId, {

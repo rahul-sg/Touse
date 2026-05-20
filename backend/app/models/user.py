@@ -23,4 +23,5 @@ class User(Base):
     monthly_debt_credit: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     monthly_debt_other: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target_zip: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

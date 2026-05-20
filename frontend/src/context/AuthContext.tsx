@@ -5,12 +5,14 @@ interface AuthUser {
   username: string
   first_name: string
   access_token: string
+  target_zip: string | null
 }
 
 interface AuthContextValue {
   user: AuthUser | null
   login: (user: AuthUser) => void
   logout: () => void
+  updateTargetZip: (zip: string | null) => void
   isLoggedIn: boolean
 }
 
@@ -40,8 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
+  const updateTargetZip = useCallback((zip: string | null) => {
+    setUser(prev => {
+      if (!prev) return prev
+      const updated = { ...prev, target_zip: zip }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoggedIn: user !== null }}>
+    <AuthContext.Provider value={{ user, login, logout, updateTargetZip, isLoggedIn: user !== null }}>
       {children}
     </AuthContext.Provider>
   )

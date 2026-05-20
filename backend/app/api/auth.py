@@ -27,6 +27,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     username: str
     password: str
+    target_zip: str | None = None
 
 
 class ProfileRequest(BaseModel):
@@ -52,6 +53,7 @@ class TokenResponse(BaseModel):
     user_id: int
     username: str
     first_name: str
+    target_zip: str | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -93,6 +95,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         email=body.email,
         username=body.username,
         hashed_password=_hash_password(body.password),
+        target_zip=body.target_zip,
     )
     db.add(user)
     await db.commit()
@@ -103,6 +106,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         user_id=user.id,
         username=user.username,
         first_name=user.first_name,
+        target_zip=user.target_zip,
     )
 
 
@@ -118,6 +122,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         user_id=user.id,
         username=user.username,
         first_name=user.first_name,
+        target_zip=user.target_zip,
     )
 
 
@@ -185,4 +190,19 @@ async def get_me(user_id: int, db: AsyncSession = Depends(get_db)):
         "monthly_debt_credit": user.monthly_debt_credit or 0,
         "monthly_debt_other": user.monthly_debt_other or 0,
         "zip_code": user.zip_code,
+        "target_zip": user.target_zip,
     }
+
+
+@router.patch("/target-zip/{user_id}")
+async def update_target_zip(
+    user_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.target_zip = body.get("target_zip")
+    await db.commit()
+    return {"target_zip": user.target_zip}

@@ -38,6 +38,7 @@ def build_feature_matrix(engine) -> pd.DataFrame:
         prices = pd.read_sql(
             text("""
                 SELECT p.metro_id, p.date, p.median_price,
+                       p.active_listings, p.median_dom, p.price_cut_pct,
                        r.state
                 FROM metro_price_history p
                 JOIN regions r ON r.metro_id = p.metro_id
@@ -143,20 +144,26 @@ def build_feature_matrix(engine) -> pd.DataFrame:
         df["gdp_growth_lag1"] = _lag(df, "gdp_growth", 1)
         df = df.drop(columns=["gdp_growth"], errors="ignore")
 
-    # ── 8. Calendar ──────────────────────────────────────────────────────────
+    # ── 8. Zillow supply signal lags ───────────────────────────────────────────
+    for col, lag in [("active_listings", 1), ("median_dom", 1), ("price_cut_pct", 2)]:
+        if col in df.columns:
+            df[f"{col}_lag{lag}"] = _lag(df, col, lag)
+            df = df.drop(columns=[col], errors="ignore")
+
+    # ── 9. Calendar ──────────────────────────────────────────────────────────
     df["month_of_year"] = df["date"].dt.month
 
-    # ── 9. Fed rate change (monetary policy signal) ────────────────────────
+    # ── 10. Fed rate change (monetary policy signal) ────────────────────────
     if "fed_funds_rate_lag1" in df.columns:
         df["fed_rate_change"] = df["fed_funds_rate_lag1"] - _lag(df, "fed_funds_rate_lag1", 1)
 
-    # ── 10. Policy fill defaults ──────────────────────────────────────────────
+    # ── 11. Policy fill defaults ──────────────────────────────────────────────
     for col in ["zoning_reform_score", "first_time_buyer_credit_active",
                 "state_housing_bond_passed", "election_year"]:
         if col in df.columns:
             df[col] = df[col].fillna(0)
 
-    # ── 11. Final feature list ────────────────────────────────────────────────
+    # ── 12. Final feature list ────────────────────────────────────────────────
     FEATURES = [
         # Price momentum
         "price_lag1", "price_lag3", "price_lag12",
@@ -165,6 +172,8 @@ def build_feature_matrix(engine) -> pd.DataFrame:
         # Macro
         "mortgage_rate_30y_lag1", "fed_funds_rate_lag1", "fed_rate_change",
         "cpi_lag1", "housing_starts_lag2", "unemployment_lag1", "gdp_growth_lag1",
+        # Supply signals (Zillow Research)
+        "active_listings_lag1", "median_dom_lag1", "price_cut_pct_lag2",
         # Policy
         "zoning_reform_score", "first_time_buyer_credit_active",
         "state_housing_bond_passed", "election_year",
@@ -200,6 +209,7 @@ FEATURE_COLS = [
     "price_mom_3m", "price_mom_12m",
     "mortgage_rate_30y_lag1", "fed_funds_rate_lag1", "fed_rate_change",
     "cpi_lag1", "housing_starts_lag2", "unemployment_lag1", "gdp_growth_lag1",
+    "active_listings_lag1", "median_dom_lag1", "price_cut_pct_lag2",
     "zoning_reform_score", "first_time_buyer_credit_active",
     "state_housing_bond_passed", "election_year",
     "month_of_year",

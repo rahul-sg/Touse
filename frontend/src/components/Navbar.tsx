@@ -22,9 +22,11 @@ export default function Navbar() {
             Dashboard
           </NavLink>
         )}
-        <NavLink to="/map" className={({ isActive }) => (isActive ? styles.active : '')}>
-          Map
-        </NavLink>
+        {isLoggedIn && (
+          <NavLink to="/map" className={({ isActive }) => (isActive ? styles.active : '')}>
+            Map
+          </NavLink>
+        )}
         <NavLink to="/about" className={({ isActive }) => (isActive ? styles.active : '')}>
           About
         </NavLink>

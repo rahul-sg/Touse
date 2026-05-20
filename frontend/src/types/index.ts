@@ -74,6 +74,25 @@ export interface UserProfile {
   monthly_debt_credit: number
   monthly_debt_other: number
   zip_code: string | null
+  target_zip: string | null
+}
+
+export interface ReadinessResult {
+  score: number
+  components: {
+    dti_pts: number
+    dp_pts: number
+    credit_pts: number
+    cushion_pts: number
+  }
+  dti_ratio_pct: number
+  dti_ceiling_pct: number
+  dp_pct: number
+  cushion_months: number
+  credit_label: string
+  rate_used: number
+  target_price: number
+  actions: string[]
 }
 
 export interface Scenario {
