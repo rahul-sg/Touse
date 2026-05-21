@@ -26,9 +26,16 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
     >
       <div className={styles.header}>
         <span className={styles.name}>{scenario.name}</span>
-        <span className={`${styles.badge} ${scenario.scenario_type === 'rent' ? styles.badgeRent : styles.badgeBuy}`}>
-          {scenario.scenario_type.toUpperCase()}
-        </span>
+        <div className={styles.badges}>
+          <span className={`${styles.badge} ${scenario.scenario_type === 'rent' ? styles.badgeRent : styles.badgeBuy}`}>
+            {scenario.scenario_type.toUpperCase()}
+          </span>
+          {scenario.scenario_type === 'buy' && scenario.loan_type && scenario.loan_type !== 'conventional' && (
+            <span className={styles.badgeLoan}>
+              {scenario.loan_type.replace('_', ' ').toUpperCase()}
+            </span>
+          )}
+        </div>
       </div>
 
       {scenario.cached_max_price != null ? (

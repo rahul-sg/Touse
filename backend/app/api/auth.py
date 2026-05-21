@@ -40,6 +40,11 @@ class ProfileRequest(BaseModel):
     monthly_debt_credit: float = 0
     monthly_debt_other: float = 0
     zip_code: str
+    # Enhanced financial profile (Phase 4)
+    liquid_savings: float | None = None
+    brokerage_value: float | None = None
+    retirement_value: float | None = None
+    monthly_take_home: float | None = None
 
 
 class LoginRequest(BaseModel):
@@ -152,6 +157,10 @@ async def save_profile_for_user(
     user.monthly_debt_credit = body.monthly_debt_credit
     user.monthly_debt_other = body.monthly_debt_other
     user.zip_code = body.zip_code
+    user.liquid_savings = body.liquid_savings
+    user.brokerage_value = body.brokerage_value
+    user.retirement_value = body.retirement_value
+    user.monthly_take_home = body.monthly_take_home
 
     await db.commit()
     await db.refresh(user)
@@ -167,6 +176,10 @@ async def save_profile_for_user(
         "monthly_debt_credit": user.monthly_debt_credit,
         "monthly_debt_other": user.monthly_debt_other,
         "zip_code": user.zip_code,
+        "liquid_savings": user.liquid_savings,
+        "brokerage_value": user.brokerage_value,
+        "retirement_value": user.retirement_value,
+        "monthly_take_home": user.monthly_take_home,
     }
 
 
@@ -191,6 +204,10 @@ async def get_me(user_id: int, db: AsyncSession = Depends(get_db)):
         "monthly_debt_other": user.monthly_debt_other or 0,
         "zip_code": user.zip_code,
         "target_zip": user.target_zip,
+        "liquid_savings": user.liquid_savings,
+        "brokerage_value": user.brokerage_value,
+        "retirement_value": user.retirement_value,
+        "monthly_take_home": user.monthly_take_home,
     }
 
 

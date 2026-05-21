@@ -1,3 +1,8 @@
+export interface ArmWorstCase {
+  rate_used: number
+  monthly_payment: number
+}
+
 export interface AffordabilityResult {
   max_price: number
   max_loan: number
@@ -5,6 +10,14 @@ export interface AffordabilityResult {
   rate_used: number
   down_payment: number
   buying_power_change_per_half_point: number
+  loan_type?: string
+  pmi_monthly?: number
+  mip_monthly?: number
+  upfront_mip_financed?: number
+  funding_fee_financed?: number
+  usda_annual_fee_monthly?: number
+  arm_worst_case?: ArmWorstCase
+  notes?: string[]
 }
 
 export interface ForecastPoint {
@@ -75,6 +88,10 @@ export interface UserProfile {
   monthly_debt_other: number
   zip_code: string | null
   target_zip: string | null
+  liquid_savings: number | null
+  brokerage_value: number | null
+  retirement_value: number | null
+  monthly_take_home: number | null
 }
 
 export interface ReadinessResult {
@@ -109,6 +126,7 @@ export interface Scenario {
   monthly_debt_credit: number
   monthly_debt_other: number
   zip_code: string | null
+  loan_type: string
   cached_max_price: number | null
   cached_monthly_payment: number | null
   cached_rate_used: number | null

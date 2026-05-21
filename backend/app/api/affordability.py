@@ -10,6 +10,8 @@ from app.services.affordability import calculate_affordability
 router = APIRouter(tags=["affordability"])
 limiter = Limiter(key_func=get_remote_address)
 
+VALID_LOAN_TYPES = {"conventional", "fha", "va", "usda", "arm_5_1", "jumbo"}
+
 
 class AffordabilityRequest(BaseModel):
     annual_income: float
@@ -18,6 +20,7 @@ class AffordabilityRequest(BaseModel):
     credit_score: int
     down_payment: float
     zip_code: str
+    loan_type: str = "conventional"
 
 
 @router.post("/affordability")
@@ -27,4 +30,6 @@ async def get_affordability(
     body: AffordabilityRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    if body.loan_type not in VALID_LOAN_TYPES:
+        body.loan_type = "conventional"
     return await calculate_affordability(body, db)

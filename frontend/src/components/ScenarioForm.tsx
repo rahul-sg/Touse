@@ -33,8 +33,20 @@ const CREDIT_OPTIONS = [
   { label: 'Bad (<620)', value: 580 },
 ]
 
+type LoanType = 'conventional' | 'fha' | 'va' | 'usda' | 'arm_5_1' | 'jumbo'
+
+const LOAN_TYPES: { value: LoanType; label: string; hint: string }[] = [
+  { value: 'conventional', label: 'Conventional', hint: '5% down, 36% DTI' },
+  { value: 'fha', label: 'FHA', hint: '3.5% down, 43% DTI' },
+  { value: 'va', label: 'VA', hint: '0% down, veterans only' },
+  { value: 'usda', label: 'USDA', hint: '0% down, rural only' },
+  { value: 'arm_5_1', label: 'ARM 5/1', hint: 'Lower initial rate' },
+  { value: 'jumbo', label: 'Jumbo', hint: '>$766k conforming' },
+]
+
 export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
   const [mode, setMode] = useState<'buy' | 'rent'>('buy')
+  const [loanType, setLoanType] = useState<LoanType>('conventional')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -70,6 +82,7 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
           credit_score: Number(values.credit_score),
           down_payment: Number(values.down_payment),
           zip_code: values.zip_code,
+          loan_type: loanType,
         })
         cachedMaxPrice = aff.max_price
         cachedMonthlyPayment = aff.monthly_payment
@@ -101,6 +114,7 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
         monthly_debt_credit: Number(values.monthly_debt_credit),
         monthly_debt_other: Number(values.monthly_debt_other),
         zip_code: values.zip_code,
+        loan_type: mode === 'buy' ? loanType : undefined,
         cached_max_price: cachedMaxPrice,
         cached_monthly_payment: cachedMonthlyPayment,
         cached_rate_used: cachedRateUsed,
@@ -137,6 +151,42 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
             Rent
           </button>
         </div>
+
+        {/* Loan type selector — buy only */}
+        {mode === 'buy' && (
+          <div className={styles.loanTypeSection}>
+            <p className={styles.loanTypeLabel}>Loan type</p>
+            <div className={styles.loanTypeGrid}>
+              {LOAN_TYPES.map(lt => (
+                <button
+                  key={lt.value}
+                  type="button"
+                  className={`${styles.loanTypeBtn} ${loanType === lt.value ? styles.loanTypeBtnActive : ''}`}
+                  onClick={() => setLoanType(lt.value)}
+                >
+                  <span className={styles.loanTypeName}>{lt.label}</span>
+                  <span className={styles.loanTypeHint}>{lt.hint}</span>
+                </button>
+              ))}
+            </div>
+            {loanType === 'arm_5_1' && (
+              <p className={styles.loanTypeWarning}>
+                ARM rates adjust after 5 years — your max payment shown is the initial rate.
+                We will also show your worst-case payment at the rate cap.
+              </p>
+            )}
+            {loanType === 'va' && (
+              <p className={styles.loanTypeInfo}>
+                VA loans require military service eligibility. A 2.15% funding fee is financed into the loan.
+              </p>
+            )}
+            {loanType === 'usda' && (
+              <p className={styles.loanTypeInfo}>
+                USDA loans are limited to rural and suburban areas with income limits. A 1% upfront fee applies.
+              </p>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className={styles.fields}>
           {/* Name */}

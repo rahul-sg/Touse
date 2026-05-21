@@ -25,6 +25,10 @@ export interface ProfilePayload {
   monthly_debt_credit: number
   monthly_debt_other: number
   zip_code: string
+  liquid_savings?: number
+  brokerage_value?: number
+  retirement_value?: number
+  monthly_take_home?: number
 }
 
 export interface AuthResponse {
@@ -99,6 +103,7 @@ export interface ScenarioPayload {
   monthly_debt_credit?: number
   monthly_debt_other?: number
   zip_code?: string
+  loan_type?: string
   cached_max_price?: number
   cached_monthly_payment?: number
   cached_rate_used?: number

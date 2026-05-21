@@ -16,6 +16,15 @@ function fmtRate(r: number) {
   return `${r.toFixed(2)}%`
 }
 
+// ── Mortgage payment helper (for ARM worst-case display) ─────────────────────
+
+function monthlyPayment(principal: number, annualRatePct: number, years = 30): number {
+  const r = annualRatePct / 100 / 12
+  const n = years * 12
+  if (r === 0) return principal / n
+  return (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1)
+}
+
 // ── Summary paragraph ────────────────────────────────────────────────────────
 
 function buildSummary(scenario: Scenario, r: ReadinessResult): string {
@@ -122,6 +131,16 @@ export default function ScenarioDetail() {
 
   const typeBadgeClass = scenario.scenario_type === 'rent' ? styles.badgeRent : styles.badgeBuy
 
+  const loanTypeLabel: Record<string, string> = {
+    conventional: 'Conventional',
+    fha: 'FHA',
+    va: 'VA',
+    usda: 'USDA',
+    arm_5_1: 'ARM 5/1',
+    jumbo: 'Jumbo',
+  }
+  const loanLabel = loanTypeLabel[scenario.loan_type] ?? scenario.loan_type?.toUpperCase()
+
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
@@ -136,6 +155,9 @@ export default function ScenarioDetail() {
               <span className={`${styles.badge} ${typeBadgeClass}`}>
                 {scenario.scenario_type === 'rent' ? 'RENT' : 'BUY'}
               </span>
+              {scenario.scenario_type === 'buy' && loanLabel && (
+                <span className={`${styles.badge} ${styles.badgeLoan}`}>{loanLabel}</span>
+              )}
               <h1 className={styles.title}>{scenario.name}</h1>
             </div>
             {scenario.zip_code && (
@@ -167,6 +189,25 @@ export default function ScenarioDetail() {
               <div className={styles.summaryCard}>
                 <p className={styles.summaryEyebrow}>Your situation</p>
                 <p className={styles.summaryText}>{summary}</p>
+              </div>
+            )}
+
+            {/* ARM worst-case callout */}
+            {scenario.loan_type === 'arm_5_1' && scenario.cached_rate_used != null && scenario.cached_max_price != null && scenario.down_payment != null && (
+              <div className={styles.armCallout}>
+                <p className={styles.armCalloutTitle}>Rate risk — ARM 5/1</p>
+                <p className={styles.armCalloutBody}>
+                  Your initial rate is <strong>{scenario.cached_rate_used.toFixed(2)}%</strong>.
+                  After year 5, if rates rise to the lifetime cap (+5%), your monthly payment could reach{' '}
+                  <strong>
+                    {fmt(Math.round(monthlyPayment(
+                      scenario.cached_max_price - scenario.down_payment,
+                      scenario.cached_rate_used + 5,
+                    )))}
+                    /mo
+                  </strong>{' '}
+                  — up from {fmt(scenario.cached_monthly_payment ?? 0)}/mo today.
+                </p>
               </div>
             )}
 

@@ -36,6 +36,21 @@
 }
 .badgeBuy { background: rgba(28,58,47,0.10); color: var(--color-forest); }
 .badgeRent { background: rgba(45,106,106,0.10); color: #2D6A6A; }
+.badgeLoan {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: rgba(181,147,90,0.12);
+  color: var(--color-brass);
+  flex-shrink: 0;
+}
+.badges {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
 .price {
   font-family: var(--font-serif);
   font-size: 1.35rem;

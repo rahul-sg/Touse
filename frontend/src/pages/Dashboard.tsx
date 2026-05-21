@@ -89,6 +89,7 @@ export default function Dashboard() {
                   monthly_debt_other: me.monthly_debt_other,
                   cached_max_price: aff.max_price,
                   rate_used: aff.rate_used,
+                  liquid_savings: me.liquid_savings ?? undefined,
                 })
                 if (!cancelled) setReadiness(r)
               } catch { /* readiness is optional — don't block dashboard */ }
