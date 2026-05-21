@@ -52,6 +52,7 @@ export interface ReadinessRequest {
   cached_max_price?: number
   rate_used?: number
   liquid_savings?: number
+  target_zip?: string
 }
 
 export interface ReadinessResult {
@@ -61,6 +62,7 @@ export interface ReadinessResult {
     dp_pts: number
     credit_pts: number
     cushion_pts: number
+    market_fit_pts: number
   }
   dti_ratio_pct: number
   dti_ceiling_pct: number
@@ -69,6 +71,9 @@ export interface ReadinessResult {
   credit_label: string
   rate_used: number
   target_price: number
+  market_median: number | null
+  market_fit_label: string | null
+  market_fit_ratio_pct: number | null
   actions: string[]
 }
 
@@ -135,6 +140,38 @@ export async function getReadiness(payload: ReadinessRequest): Promise<Readiness
 
 export async function setTargetZip(userId: number, targetZip: string | null): Promise<void> {
   await api.patch(`/api/v1/auth/target-zip/${userId}`, { target_zip: targetZip })
+}
+
+export async function lookupZip(zip: string): Promise<{
+  zip_code: string; lat: number; lng: number; city: string | null; state_code: string | null; state_name: string | null
+}> {
+  const { data } = await api.get(`/api/v1/zip/lookup`, { params: { zip } })
+  return data
+}
+
+export async function getZipForecast(zip: string): Promise<{
+  zip_code: string; city: string | null; state: string | null; metro: string | null
+  current_median_value: number; as_of: string
+  trend_3m_pct: number | null; trend_6m_pct: number | null; trend_12m_pct: number | null
+  direction: string; data_points: number
+}> {
+  const { data } = await api.get(`/api/v1/zip/forecast`, { params: { zip } })
+  return data
+}
+
+export async function compareNowVsWait(payload: {
+  annual_income: number
+  monthly_debt: number
+  credit_score: number
+  down_payment: number
+  savings: number
+  zip_code?: string
+  loan_type?: string
+  monthly_savings: number
+  wait_months?: number
+}) {
+  const { data } = await api.post('/api/v1/compare/now-vs-wait', payload)
+  return data
 }
 
 export async function getRentalAffordability(payload: {

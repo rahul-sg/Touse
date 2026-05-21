@@ -1,0 +1,138 @@
+.panel {
+  padding: 1rem 1.25rem;
+  background: var(--color-stone);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.zip {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+}
+
+.city {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.direction {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+}
+
+.dirRising {
+  background: rgba(28, 58, 47, 0.1);
+  color: var(--color-forest);
+}
+
+.dirFalling {
+  background: rgba(139, 58, 58, 0.1);
+  color: #8B3A3A;
+}
+
+.dirFlat {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.price {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.priceSub {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.trends {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.trendCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.trendLabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.trendUp {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+
+.trendDown {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #8B3A3A;
+}
+
+.trendNeutral {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.metro {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.2rem;
+}
+
+.asOf {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.loading {
+  padding: 0.875rem 1.25rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  background: var(--color-stone);
+}
+
+.missing {
+  padding: 0.875rem 1.25rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  background: var(--color-stone);
+}
+
+.missingHint {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}

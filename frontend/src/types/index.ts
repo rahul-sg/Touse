@@ -134,6 +134,28 @@ export interface Scenario {
   created_at: string
 }
 
+export interface NowVsWaitScenario {
+  max_price: number
+  monthly_payment: number
+  rate_used: number
+  down_payment: number
+}
+
+export interface NowVsWaitResult {
+  now: NowVsWaitScenario
+  wait: {
+    flat: NowVsWaitScenario
+    rate_down_half: NowVsWaitScenario
+    rate_up_half: NowVsWaitScenario
+  }
+  additional_savings: number
+  wait_months: number
+  price_delta_flat: number
+  recommendation: 'buy_now' | 'wait' | 'neutral'
+  factors: string[]
+  current_rate_pct: number
+}
+
 export interface RentalAffordability {
   max_monthly_rent: number
   recommended_monthly_rent: number

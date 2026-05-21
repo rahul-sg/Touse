@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import TouseMap from '../components/TouseMap'
 import ListingSidebar from '../components/ListingSidebar'
+import ZipForecastPanel from '../components/ZipForecastPanel'
 import { useListings } from '../hooks/useListings'
+import { lookupZip } from '../utils/api'
 import styles from './MapView.module.css'
 
 interface LocationState {
@@ -30,13 +32,23 @@ export default function MapView() {
   const [maxPrice, setMaxPrice] = useState(state?.maxPrice ?? DEFAULT_MAX_PRICE)
   const [minBeds, setMinBeds] = useState(1)
 
-  // Use user's target_zip as a hint for initial center when available.
-  // Phase 5 will resolve ZIP → lat/lng via the nearest-zip endpoint.
-  // For now, fall back to geographic center of the USA.
   const [viewport, setViewport] = useState(DEFAULT_CENTER)
+  const [activeZip, setActiveZip] = useState<string | null>(null)
 
-  // Store target_zip for display in the forecast panel (Phase 8)
   const targetZip = user?.target_zip ?? null
+
+  // Resolve target_zip → lat/lng on mount so the map centers on the user's area
+  useEffect(() => {
+    if (!targetZip) return
+    lookupZip(targetZip)
+      .then(result => {
+        setViewport({ lat: result.lat, lng: result.lng })
+        setActiveZip(targetZip)
+      })
+      .catch(() => {
+        // ZIP not found — stay at default center
+      })
+  }, [targetZip])
 
   const { data: listings = [], isFetching } = useListings({
     lat: viewport.lat,
@@ -74,6 +86,7 @@ export default function MapView() {
           onMaxPriceChange={setMaxPrice}
           minBeds={minBeds}
           onMinBedsChange={setMinBeds}
+          zipForecastPanel={activeZip ? <ZipForecastPanel zip={activeZip} /> : null}
         />
         <div className={styles.mapWrap}>
           <TouseMap

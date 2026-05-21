@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Listing } from '../types'
 import styles from './ListingSidebar.module.css'
 
@@ -8,6 +9,7 @@ interface Props {
   onMaxPriceChange: (v: number) => void
   minBeds: number
   onMinBedsChange: (v: number) => void
+  zipForecastPanel?: ReactNode
 }
 
 function fmt(n: number) {
@@ -21,6 +23,7 @@ export default function ListingSidebar({
   onMaxPriceChange,
   minBeds,
   onMinBedsChange,
+  zipForecastPanel,
 }: Props) {
   return (
     <aside className={styles.sidebar}>
@@ -62,6 +65,10 @@ export default function ListingSidebar({
           </div>
         </div>
       </div>
+
+      {zipForecastPanel && (
+        <div className={styles.forecastSlot}>{zipForecastPanel}</div>
+      )}
 
       <div className={styles.list}>
         {isLoading && (

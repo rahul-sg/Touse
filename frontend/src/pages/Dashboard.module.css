@@ -284,6 +284,67 @@
   color: var(--color-text);
   z-index: 1;
 }
+.scoreBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}
+.scoreRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.scoreRowLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.scoreRowPts {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.scoreRowMax {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Market fit badge inline in score breakdown */
+.marketFitBadge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+.marketFitStrong {
+  background: rgba(28, 58, 47, 0.1);
+  color: var(--color-forest);
+}
+.marketFitGood {
+  background: rgba(28, 58, 47, 0.07);
+  color: var(--color-forest);
+}
+.marketFitFair {
+  background: rgba(180, 140, 50, 0.12);
+  color: var(--color-brass);
+}
+.marketFitTight {
+  background: rgba(139, 58, 58, 0.1);
+  color: #8B3A3A;
+}
+.marketFitVerytight {
+  background: rgba(139, 58, 58, 0.15);
+  color: #8B3A3A;
+}
+
 .actionItems {
   display: flex;
   flex-direction: column;

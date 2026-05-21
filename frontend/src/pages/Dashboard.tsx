@@ -5,6 +5,7 @@ import { getMe, api, getReadiness } from '../utils/api'
 import { useScenarios, useDeleteScenario } from '../hooks/useScenarios'
 import ScenarioCard from '../components/ScenarioCard'
 import ScenarioForm from '../components/ScenarioForm'
+import NowVsWait from '../components/NowVsWait'
 import type { AffordabilityResult, UserProfile, Scenario, ReadinessResult } from '../types'
 import styles from './Dashboard.module.css'
 
@@ -90,6 +91,7 @@ export default function Dashboard() {
                   cached_max_price: aff.max_price,
                   rate_used: aff.rate_used,
                   liquid_savings: me.liquid_savings ?? undefined,
+                  target_zip: me.zip_code ?? undefined,
                 })
                 if (!cancelled) setReadiness(r)
               } catch { /* readiness is optional — don't block dashboard */ }
@@ -200,6 +202,16 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Now vs Wait */}
+              {!isLoading && hasProfile && result && profile && (
+                <NowVsWait
+                  profile={profile}
+                  currentMaxPrice={result.max_price}
+                  currentRate={result.rate_used}
+                  loanType={result.loan_type}
+                />
+              )}
+
               {/* Quick actions */}
               <div className={styles.quickActions}>
                 <Link to="/map" className={styles.actionCard}>
@@ -260,6 +272,38 @@ export default function Dashboard() {
                 >
                   <span className={styles.scoreNumber}>{readiness.score}</span>
                 </div>
+
+                {/* Component breakdown */}
+                <div className={styles.scoreBreakdown}>
+                  <div className={styles.scoreRow}>
+                    <span className={styles.scoreRowLabel}>Debt-to-income</span>
+                    <span className={styles.scoreRowPts}>{readiness.components.dti_pts}<span className={styles.scoreRowMax}>/30</span></span>
+                  </div>
+                  <div className={styles.scoreRow}>
+                    <span className={styles.scoreRowLabel}>Down payment</span>
+                    <span className={styles.scoreRowPts}>{readiness.components.dp_pts}<span className={styles.scoreRowMax}>/20</span></span>
+                  </div>
+                  <div className={styles.scoreRow}>
+                    <span className={styles.scoreRowLabel}>Credit score</span>
+                    <span className={styles.scoreRowPts}>{readiness.components.credit_pts}<span className={styles.scoreRowMax}>/20</span></span>
+                  </div>
+                  <div className={styles.scoreRow}>
+                    <span className={styles.scoreRowLabel}>Savings cushion</span>
+                    <span className={styles.scoreRowPts}>{readiness.components.cushion_pts}<span className={styles.scoreRowMax}>/15</span></span>
+                  </div>
+                  {readiness.market_fit_label && (
+                    <div className={styles.scoreRow}>
+                      <span className={styles.scoreRowLabel}>
+                        Market fit
+                        <span className={`${styles.marketFitBadge} ${styles[`marketFit${readiness.market_fit_label.replace(' ', '')}`]}`}>
+                          {readiness.market_fit_label}
+                        </span>
+                      </span>
+                      <span className={styles.scoreRowPts}>{readiness.components.market_fit_pts}<span className={styles.scoreRowMax}>/15</span></span>
+                    </div>
+                  )}
+                </div>
+
                 {readiness.actions.length > 0 && (
                   <div className={styles.actionItems}>
                     {readiness.actions.map((a, i) => (

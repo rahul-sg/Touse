@@ -196,3 +196,8 @@
 }
 
 .cardLink:hover { text-decoration: underline; }
+
+.forecastSlot {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0;
+}
