@@ -1,53 +1,66 @@
+"""
+Celery task for keeping ZIP price forecasts fresh.
+
+ZIP forecasts are trained on demand and cached in zip_forecast_results with a
+30-day TTL. This task proactively re-trains every ZIP a user has already
+viewed, so popular ZIPs never go stale and returning users skip the
+~1-2s on-demand training wait.
+"""
 import os
+from datetime import datetime
+
 from tasks.celery_app import app
 
-_DB_URL = lambda: os.environ.get(
+_DB_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+asyncpg://touse:touse@localhost:5432/touse",
 ).replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
 
-@app.task(name="tasks.ml_tasks.retrain_prophet_all", bind=True, max_retries=2)
-def retrain_prophet_all(self):
-    """Retrain Prophet forecast for every metro with enough price history."""
+@app.task(name="tasks.ml_tasks.refresh_zip_forecasts", bind=True, max_retries=2)
+def refresh_zip_forecasts(self):
+    """Re-train the Prophet forecast for every ZIP currently in the cache."""
     try:
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
-        from app.models.region import Region
-        from app.ml.train_prophet import train_metro
 
-        engine = create_engine(_DB_URL())
+        from app.models.zip_forecast_result import ZipForecastResult
+        from app.models.zip_price_history import ZipPriceHistory
+        from app.services.zip_projection import _fit_and_forecast, MODEL_VERSION, MIN_MONTHS
+
+        engine = create_engine(_DB_URL)
+        refreshed = 0
         with Session(engine) as session:
-            metro_ids = session.execute(select(Region.metro_id)).scalars().all()
-            trained = sum(train_metro(session, m) for m in metro_ids)
-            print(f"retrain_prophet_all: trained {trained}/{len(metro_ids)} metros")
-    except Exception as exc:
-        raise self.retry(exc=exc, countdown=60 * 30)
+            zip_codes = session.execute(
+                select(ZipForecastResult.zip_code)
+            ).scalars().all()
 
+            for zip_code in zip_codes:
+                rows = session.execute(
+                    select(ZipPriceHistory.date, ZipPriceHistory.median_value)
+                    .where(
+                        ZipPriceHistory.zip_code == zip_code,
+                        ZipPriceHistory.median_value.isnot(None),
+                    )
+                    .order_by(ZipPriceHistory.date)
+                ).all()
+                history = [(d, float(v)) for d, v in rows]
+                if len(history) < MIN_MONTHS:
+                    continue
 
-@app.task(name="tasks.ml_tasks.retrain_prophet_metro", bind=True, max_retries=3)
-def retrain_prophet_metro(self, metro_id: str):
-    """Retrain Prophet forecast for a single metro (on-demand)."""
-    try:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import Session
-        from app.ml.train_prophet import train_metro
+                points, current_value, pct = _fit_and_forecast(history)
+                row = session.execute(
+                    select(ZipForecastResult).where(ZipForecastResult.zip_code == zip_code)
+                ).scalar_one()
+                row.model_version = MODEL_VERSION
+                row.trained_at = datetime.utcnow()
+                row.current_value = current_value
+                row.forecast_12m_pct = pct
+                row.data_points = len(history)
+                row.forecast_12m = points
+                refreshed += 1
 
-        engine = create_engine(_DB_URL())
-        with Session(engine) as session:
-            train_metro(session, metro_id)
-    except Exception as exc:
-        raise self.retry(exc=exc, countdown=60 * 5)
-
-
-@app.task(name="tasks.ml_tasks.retrain_lightgbm", bind=True, max_retries=2)
-def retrain_lightgbm(self):
-    """
-    Retrain the global LightGBM model across all metros.
-    Runs after Prophet (17th of each month) so price history is already fresh.
-    """
-    try:
-        from app.ml.train_lightgbm import run
-        run()
+            session.commit()
+        print(f"refresh_zip_forecasts: refreshed {refreshed}/{len(zip_codes)} ZIPs")
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60 * 30)

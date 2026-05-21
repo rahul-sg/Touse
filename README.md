@@ -40,7 +40,7 @@ flowchart LR
         CENSUS["US Census geocoder"]
     end
 
-    subgraph etl[ETL scripts · run offline]
+    subgraph etl[ETL · scheduled by Celery Beat]
         E1["Zillow ZIP prices"]
         E2["Freddie Mac PMMS"]
         E3["FRED"]
