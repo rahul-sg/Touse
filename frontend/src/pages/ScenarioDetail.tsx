@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useScenarios } from '../hooks/useScenarios'
 import { getReadiness } from '../utils/api'
 import type { Scenario, ReadinessResult } from '../types'
+import ScenarioForm from '../components/ScenarioForm'
 import styles from './ScenarioDetail.module.css'
 
 // ── Formatters ───────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ export default function ScenarioDetail() {
   const { data: scenarios = [], isLoading: scenariosLoading } = useScenarios(isLoggedIn ? user?.user_id : undefined)
   const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const scenarioId = Number(id)
   const scenario = scenarios.find((s) => s.id === scenarioId)
@@ -97,7 +99,19 @@ export default function ScenarioDetail() {
       .then(setReadiness)
       .catch(() => setReadiness(null))
       .finally(() => setReadinessLoading(false))
-  }, [scenario?.id])
+  }, [
+    scenario?.id,
+    scenario?.annual_income,
+    scenario?.savings,
+    scenario?.down_payment,
+    scenario?.credit_score,
+    scenario?.monthly_debt_car,
+    scenario?.monthly_debt_student,
+    scenario?.monthly_debt_credit,
+    scenario?.monthly_debt_other,
+    scenario?.cached_max_price,
+    scenario?.cached_rate_used,
+  ])
 
   if (!isLoggedIn) {
     navigate('/login')
@@ -159,6 +173,9 @@ export default function ScenarioDetail() {
                 <span className={`${styles.badge} ${styles.badgeLoan}`}>{loanLabel}</span>
               )}
               <h1 className={styles.title}>{scenario.name}</h1>
+              <button className={styles.editBtn} onClick={() => setEditOpen(true)}>
+                Edit
+              </button>
             </div>
             {scenario.zip_code && (
               <p className={styles.meta}>{scenario.zip_code}</p>
@@ -354,6 +371,16 @@ export default function ScenarioDetail() {
           )}
         </div>
       </div>
+
+      {/* Edit modal */}
+      {editOpen && user && (
+        <ScenarioForm
+          userId={user.user_id}
+          editScenario={scenario}
+          onClose={() => setEditOpen(false)}
+          onCreated={() => setEditOpen(false)}
+        />
+      )}
     </div>
   )
 }

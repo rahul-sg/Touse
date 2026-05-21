@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { api, createScenario } from '../utils/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { api, createScenario, updateScenario } from '../utils/api'
 import type { AffordabilityResult, Scenario, RentalAffordability } from '../types'
 import styles from './ScenarioForm.module.css'
 
@@ -8,6 +9,8 @@ interface Props {
   userId: number
   onClose: () => void
   onCreated: (s: Scenario) => void
+  /** When provided the form opens in edit mode, pre-populated with this scenario */
+  editScenario?: Scenario
 }
 
 interface FormValues {
@@ -44,19 +47,30 @@ const LOAN_TYPES: { value: LoanType; label: string; hint: string }[] = [
   { value: 'jumbo', label: 'Jumbo', hint: '>$766k conforming' },
 ]
 
-export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
-  const [mode, setMode] = useState<'buy' | 'rent'>('buy')
-  const [loanType, setLoanType] = useState<LoanType>('conventional')
+export default function ScenarioForm({ userId, onClose, onCreated, editScenario }: Props) {
+  const isEdit = Boolean(editScenario)
+  const queryClient = useQueryClient()
+  const [mode, setMode] = useState<'buy' | 'rent'>(
+    editScenario?.scenario_type === 'rent' ? 'rent' : 'buy'
+  )
+  const [loanType, setLoanType] = useState<LoanType>(
+    (editScenario?.loan_type as LoanType) ?? 'conventional'
+  )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
-      monthly_debt_car: 0,
-      monthly_debt_student: 0,
-      monthly_debt_credit: 0,
-      monthly_debt_other: 0,
-      credit_score: 730,
+      name: editScenario?.name ?? '',
+      annual_income: editScenario?.annual_income ?? undefined,
+      savings: editScenario?.savings ?? undefined,
+      down_payment: editScenario?.down_payment ?? undefined,
+      monthly_debt_car: editScenario?.monthly_debt_car ?? 0,
+      monthly_debt_student: editScenario?.monthly_debt_student ?? 0,
+      monthly_debt_credit: editScenario?.monthly_debt_credit ?? 0,
+      monthly_debt_other: editScenario?.monthly_debt_other ?? 0,
+      credit_score: editScenario?.credit_score ?? 730,
+      zip_code: editScenario?.zip_code ?? '',
     },
   })
 
@@ -102,7 +116,7 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
         cachedMonthlyPayment = rental.recommended_monthly_rent
       }
 
-      const scenario = await createScenario(userId, {
+      const payload = {
         name: values.name,
         scenario_type: mode,
         annual_income: Number(values.annual_income),
@@ -118,7 +132,14 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
         cached_max_price: cachedMaxPrice,
         cached_monthly_payment: cachedMonthlyPayment,
         cached_rate_used: cachedRateUsed,
-      })
+      }
+
+      const scenario = isEdit && editScenario
+        ? await updateScenario(editScenario.id, payload)
+        : await createScenario(userId, payload)
+
+      // Invalidate the scenarios cache so ScenarioDetail re-renders with fresh data
+      await queryClient.invalidateQueries({ queryKey: ['scenarios', userId] })
 
       onCreated(scenario)
       onClose()
@@ -133,7 +154,7 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()}>
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close">✕</button>
-        <h2 className={styles.title}>New scenario</h2>
+        <h2 className={styles.title}>{isEdit ? 'Edit scenario' : 'New scenario'}</h2>
 
         <div className={styles.tabs}>
           <button
@@ -306,7 +327,7 @@ export default function ScenarioForm({ userId, onClose, onCreated }: Props) {
           {submitError && <p className={styles.error}>{submitError}</p>}
 
           <button type="submit" className={styles.submitBtn} disabled={submitting}>
-            {submitting ? 'Calculating…' : `Calculate & save ${mode} scenario`}
+            {submitting ? 'Recalculating…' : isEdit ? `Recalculate & save` : `Calculate & save ${mode} scenario`}
           </button>
         </form>
       </div>

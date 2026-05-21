@@ -125,7 +125,12 @@ async def get_listings(
     if not RAPIDAPI_KEY:
         return _mock_listings(lat, lng, max_price, min_beds)
 
-    # Check cache freshness
+    # Bounding box for cache lookup (~radius_miles converted to degrees)
+    import math as _math
+    lat_delta = radius_miles / 69.0
+    lng_delta = radius_miles / (69.0 * _math.cos(_math.radians(lat)))
+
+    # Check cache freshness — must also be geographically nearby
     stale_cutoff = datetime.utcnow() - timedelta(hours=CACHE_TTL_HOURS)
     result = await db.execute(
         select(ListingCache)
@@ -134,6 +139,8 @@ async def get_listings(
                 ListingCache.price <= max_price,
                 ListingCache.beds >= min_beds,
                 ListingCache.fetched_at >= stale_cutoff,
+                ListingCache.lat.between(lat - lat_delta, lat + lat_delta),
+                ListingCache.lng.between(lng - lng_delta, lng + lng_delta),
             )
         )
         .limit(42)

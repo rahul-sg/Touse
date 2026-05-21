@@ -142,6 +142,17 @@ export async function setTargetZip(userId: number, targetZip: string | null): Pr
   await api.patch(`/api/v1/auth/target-zip/${userId}`, { target_zip: targetZip })
 }
 
+export async function getNearestZip(lat: number, lng: number): Promise<{
+  zip_code: string; lat: number; lng: number; city: string | null; state_code: string | null
+} | null> {
+  try {
+    const { data } = await api.get('/api/v1/zip/nearest', { params: { lat, lng } })
+    return data
+  } catch {
+    return null
+  }
+}
+
 export async function lookupZip(zip: string): Promise<{
   zip_code: string; lat: number; lng: number; city: string | null; state_code: string | null; state_name: string | null
 }> {

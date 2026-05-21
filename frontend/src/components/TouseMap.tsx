@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import Map, { type MapRef, NavigationControl } from 'react-map-gl/maplibre'
 import type { BBox } from 'geojson'
 import Supercluster from 'supercluster'
@@ -20,6 +20,7 @@ interface Props {
   listings: Listing[]
   onViewportChange?: (lat: number, lng: number, zoom: number) => void
   maxPrice?: number
+  centerOn?: { lat: number; lng: number } | null
 }
 
 type GeoFeature = GeoJSON.Feature<GeoJSON.Point, Listing & { cluster: false }>
@@ -32,13 +33,23 @@ function toFeatures(listings: Listing[]): GeoFeature[] {
   }))
 }
 
-export default function TouseMap({ listings, onViewportChange, maxPrice }: Props) {
+export default function TouseMap({ listings, onViewportChange, maxPrice, centerOn }: Props) {
   const mapRef = useRef<MapRef>(null)
   const [viewState, setViewState] = useState<ViewState>({
     longitude: -98.5795,
     latitude: 39.8283,
     zoom: 4,
   })
+
+  // Fly to centerOn when it changes (e.g. user's target ZIP resolved)
+  useEffect(() => {
+    if (!centerOn) return
+    mapRef.current?.flyTo({
+      center: [centerOn.lng, centerOn.lat],
+      zoom: 11,
+      duration: 1000,
+    })
+  }, [centerOn?.lat, centerOn?.lng])
   const [selected, setSelected] = useState<Listing | null>(null)
 
   const supercluster = new Supercluster({ radius: 60, maxZoom: 14 })
@@ -56,6 +67,14 @@ export default function TouseMap({ listings, onViewportChange, maxPrice }: Props
   const handleMove = useCallback(
     (evt: { viewState: ViewState }) => {
       setViewState(evt.viewState)
+    },
+    []
+  )
+
+  // Only notify parent when the map has fully stopped moving (end of pan, zoom, or flyTo).
+  // This prevents flooding useListings with a query per animation frame.
+  const handleMoveEnd = useCallback(
+    (evt: { viewState: ViewState }) => {
       onViewportChange?.(evt.viewState.latitude, evt.viewState.longitude, evt.viewState.zoom)
     },
     [onViewportChange]
@@ -74,6 +93,7 @@ export default function TouseMap({ listings, onViewportChange, maxPrice }: Props
       ref={mapRef}
       {...viewState}
       onMove={handleMove}
+      onMoveEnd={handleMoveEnd}
       mapStyle={MAP_STYLE}
       style={{ width: '100%', height: '100%' }}
     >

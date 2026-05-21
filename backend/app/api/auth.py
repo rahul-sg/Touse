@@ -157,6 +157,8 @@ async def save_profile_for_user(
     user.monthly_debt_credit = body.monthly_debt_credit
     user.monthly_debt_other = body.monthly_debt_other
     user.zip_code = body.zip_code
+    if body.zip_code:
+        user.target_zip = body.zip_code  # keep target_zip in sync for map centering
     user.liquid_savings = body.liquid_savings
     user.brokerage_value = body.brokerage_value
     user.retirement_value = body.retirement_value

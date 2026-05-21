@@ -67,16 +67,23 @@ async def nearest_zip(
     lng: float = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Find the nearest ZIP centroid to a lat/lng coordinate."""
-    # Bounding box filter first (±1.5 degrees ≈ 165 km) then exact haversine
-    result = await db.execute(
-        select(ZipCentroid)
-        .where(ZipCentroid.lat.between(lat - 1.5, lat + 1.5))
-        .where(ZipCentroid.lng.between(lng - 1.5, lng + 1.5))
-        .limit(200)
-    )
-    candidates = result.scalars().all()
+    """Find the nearest ZIP centroid to a lat/lng coordinate.
 
+    Uses a tight ±0.5° bounding box first (≈55 km, usually 50-200 ZIPs,
+    no row limit needed). Falls back to ±1.5° if nothing found in the
+    tighter box (sparse rural areas).
+    """
+    async def _candidates(delta: float):
+        result = await db.execute(
+            select(ZipCentroid)
+            .where(ZipCentroid.lat.between(lat - delta, lat + delta))
+            .where(ZipCentroid.lng.between(lng - delta, lng + delta))
+        )
+        return result.scalars().all()
+
+    candidates = await _candidates(0.5)
+    if not candidates:
+        candidates = await _candidates(1.5)
     if not candidates:
         raise HTTPException(status_code=404, detail="No ZIP centroids loaded — run ETL first")
 

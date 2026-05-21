@@ -31,3 +31,76 @@
   flex: 1;
   position: relative;
 }
+
+/* ZIP overlay badge — floats in the top-left of the map */
+.zipOverlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+.zipOverlayPin {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.zipOverlayCode {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text);
+}
+
+.zipOverlayCity {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.zipOverlaySpinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-forest);
+  border-radius: 50%;
+  animation: overlaySpinAnim 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes overlaySpinAnim {
+  to { transform: rotate(360deg); }
+}
+
+/* Sidebar "Detecting area…" state shown during the debounce window */
+.zipResolving {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  background: var(--color-stone);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zipResolving::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-forest);
+  border-radius: 50%;
+  animation: overlaySpinAnim 0.6s linear infinite;
+  flex-shrink: 0;
+}
