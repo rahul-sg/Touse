@@ -189,3 +189,53 @@
   color: #fff;
   text-decoration: none;
 }
+
+/* ── Market context card (sidebar) ─────────────────────────────────────── */
+.contextCard {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface);
+}
+
+.contextTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.6rem;
+}
+
+.contextRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.contextRow:first-of-type { border-top: none; }
+
+.contextLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.contextValue {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.contextValue.up   { color: var(--color-up); }
+.contextValue.down { color: var(--color-down); }
+
+.contextNote {
+  margin: 0.7rem 0 0;
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}

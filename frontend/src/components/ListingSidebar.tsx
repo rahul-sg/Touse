@@ -87,8 +87,8 @@ export default function ListingSidebar({
 
         {!isLoading && listings.map((l) => (
           <div key={l.id} className={styles.card}>
-            {(l as any).photo_url
-              ? <img src={(l as any).photo_url} alt={l.address} className={styles.cardPhoto} loading="lazy" />
+            {l.photo_url
+              ? <img src={l.photo_url} alt={l.address} className={styles.cardPhoto} loading="lazy" />
               : <div className={styles.cardPhotoPlaceholder}>No photo</div>
             }
             <div className={styles.cardBody}>

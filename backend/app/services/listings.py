@@ -1,11 +1,12 @@
 import os
 from datetime import datetime, timedelta
 import httpx
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.listing import ListingCache
+from app.services.geocoding import geocode_many
 
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_HOST = "realty-us.p.rapidapi.com"
@@ -53,8 +54,8 @@ async def _fetch_from_rapidapi(
         price = prop.get("list_price") or 0
         photo = (prop.get("primary_photo") or {}).get("href", "")
 
-        prop_lat = coord.get("lat") or lat
-        prop_lng = coord.get("lon") or lng
+        raw_lat = coord.get("lat")
+        raw_lng = coord.get("lon")
 
         line = address.get("line", "")
         city = address.get("city", "")
@@ -69,13 +70,26 @@ async def _fetch_from_rapidapi(
             "price": float(price),
             "beds": desc.get("beds"),
             "baths": desc.get("baths_consolidated") or desc.get("baths"),
-            "lat": float(prop_lat),
-            "lng": float(prop_lng),
+            "lat": float(raw_lat) if raw_lat is not None else None,
+            "lng": float(raw_lng) if raw_lng is not None else None,
             "zip_code": zipcode,
             "listing_url": prop.get("href") or f"https://www.realtor.com/realestateandhomes-detail/{prop.get('property_id','')}",
             "photo_url": photo,
             "fetched_at": datetime.utcnow(),
         })
+
+    # The listings API often omits per-property coordinates. Geocode those
+    # addresses via the US Census geocoder so each pin lands at its true
+    # location. Fall back to the ZIP center only when geocoding also fails.
+    missing = [l for l in listings if l["lat"] is None or l["lng"] is None]
+    if missing:
+        geocoded = await geocode_many([l["address"] for l in missing])
+        for listing, result in zip(missing, geocoded):
+            if result is not None:
+                listing["lat"], listing["lng"] = result
+            else:
+                listing["lat"], listing["lng"] = lat, lng
+
     return listings
 
 
@@ -137,7 +151,8 @@ async def get_listings(
         .where(
             and_(
                 ListingCache.price <= max_price,
-                ListingCache.beds >= min_beds,
+                # Include listings with unknown bed count (NULL) — better to show and let user judge
+                or_(ListingCache.beds.is_(None), ListingCache.beds >= min_beds),
                 ListingCache.fetched_at >= stale_cutoff,
                 ListingCache.lat.between(lat - lat_delta, lat + lat_delta),
                 ListingCache.lng.between(lng - lng_delta, lng + lng_delta),

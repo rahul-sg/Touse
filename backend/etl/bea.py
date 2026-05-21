@@ -37,8 +37,8 @@ def fetch_state_gdp() -> pd.DataFrame:
         "UserID": BEA_API_KEY,
         "method": "GetData",
         "datasetname": "Regional",
-        "TableName": "SAGDP2N",
-        "LineCode": "1",
+        "TableName": "SAGDP9",  # Real GDP by state, annual (chained dollars)
+        "LineCode": "1",        # all-industry total
         "GeoFips": "STATE",
         "Year": year_str,
         "ResultFormat": "JSON",
@@ -52,7 +52,8 @@ def fetch_state_gdp() -> pd.DataFrame:
     )
     df = df.dropna(subset=["DataValue"])
     df["Year"] = df["TimePeriod"].astype(int)
-    df["GeoFips"] = df["GeoFips"].astype(str).str.zfill(2)
+    # BEA returns 5-digit GeoFips for states ("SS000"); take the 2-digit state code.
+    df["GeoFips"] = df["GeoFips"].astype(str).str.zfill(5).str[:2]
     return df
 
 

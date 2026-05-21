@@ -28,6 +28,6 @@ export function useListings(params: ListingsParams | null) {
     queryKey: ['listings', params],
     queryFn: () => fetchListings(params!),
     enabled: !!params && params.maxPrice > 0,
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,  // 5 min — backend cache is 6hr, so re-fetching is cheap
   })
 }

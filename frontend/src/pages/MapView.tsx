@@ -13,6 +13,8 @@ interface LocationState {
   fromOnboarding?: boolean
   scenarioName?: string
   scenarioId?: number
+  /** When navigating from ScenarioDetail, center the map on the scenario's ZIP instead of user's target_zip */
+  targetZip?: string
 }
 
 interface ZipInfo {
@@ -44,24 +46,34 @@ export default function MapView() {
   const [zipInfo, setZipInfo] = useState<ZipInfo | null>(null)
   const [zipResolving, setZipResolving] = useState(false)
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null)
+  // Track whether the initial ZIP lookup is still pending, so we don't fire
+  // a wasted listings query for the US-center default viewport.
+  const [zipLookupPending, setZipLookupPending] = useState(false)
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const targetZip = user?.target_zip ?? null
 
-  // Resolve target_zip → lat/lng on mount so the map centers on the user's area
+  // Prefer scenario ZIP (when navigating from ScenarioDetail) → then user's profile target_zip
+  const initialZip = state?.targetZip ?? user?.target_zip ?? null
+
+  // Resolve initialZip → lat/lng on mount so the map centers on the right area
   useEffect(() => {
-    if (!targetZip) return
-    lookupZip(targetZip)
+    if (!initialZip) return
+    setZipLookupPending(true)
+    lookupZip(initialZip)
       .then(result => {
         setViewport({ lat: result.lat, lng: result.lng })
         setMapCenter({ lat: result.lat, lng: result.lng })
-        setActiveZip(targetZip)
-        setZipInfo({ zip_code: targetZip, city: result.city, state_code: result.state_code })
+        setActiveZip(initialZip)
+        setZipInfo({ zip_code: initialZip, city: result.city, state_code: result.state_code })
       })
       .catch(() => {
         // ZIP not found — stay at default center
       })
-  }, [targetZip])
+      .finally(() => {
+        setZipLookupPending(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialZip])
 
   // Clean up debounce on unmount
   useEffect(() => {
@@ -70,12 +82,11 @@ export default function MapView() {
     }
   }, [])
 
-  const { data: listings = [], isFetching } = useListings({
-    lat: viewport.lat,
-    lng: viewport.lng,
-    maxPrice,
-    minBeds,
-  })
+  const { data: listings = [], isFetching } = useListings(
+    zipLookupPending
+      ? null  // suppress the wasted US-center query while the target ZIP is resolving
+      : { lat: viewport.lat, lng: viewport.lng, maxPrice, minBeds }
+  )
 
   const handleViewportChange = useCallback((lat: number, lng: number) => {
     setViewport({ lat, lng })

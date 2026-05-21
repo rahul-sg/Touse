@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getZipForecast } from '../utils/api'
 import styles from './ZipForecastPanel.module.css'
 
@@ -94,6 +95,9 @@ export default function ZipForecastPanel({ zip }: Props) {
         <p className={styles.metro}>{data.metro}</p>
       )}
       <p className={styles.asOf}>As of {new Date(data.as_of).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
+      <Link to={`/forecast/${data.zip_code}`} className={styles.forecastLink}>
+        See 12-month price forecast →
+      </Link>
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import styles from './About.module.css'
 
 const SOURCES = [
-  { name: 'Zillow Research', detail: 'Monthly median home prices by metro', url: 'https://www.zillow.com/research/data/' },
-  { name: 'FRED (St. Louis Fed)', detail: 'Mortgage rates, CPI, housing starts, Fed funds rate', url: 'https://fred.stlouisfed.org/' },
+  { name: 'Zillow Research', detail: 'Monthly median home values by ZIP code', url: 'https://www.zillow.com/research/data/' },
+  { name: 'Freddie Mac PMMS', detail: 'Weekly 30- and 15-year fixed mortgage rates', url: 'https://www.freddiemac.com/pmms' },
+  { name: 'FRED (St. Louis Fed)', detail: 'CPI, housing starts, Fed funds rate, unemployment', url: 'https://fred.stlouisfed.org/' },
   { name: 'BLS', detail: 'Metro-level unemployment', url: 'https://www.bls.gov/developers/' },
   { name: 'BEA', detail: 'State GDP growth', url: 'https://apps.bea.gov/API/' },
   { name: 'Census ACS', detail: 'Population and income by ZIP code', url: 'https://www.census.gov/data/developers/' },
@@ -27,8 +28,8 @@ export default function About() {
           We apply the standard <strong>28/36 rule</strong>: your monthly housing payment
           should not exceed 28% of gross monthly income, and total debt payments should not
           exceed 36%. Your credit score adjusts the mortgage rate estimate (based on typical
-          lender tier premiums). The live 30-year fixed rate is pulled from FRED so the
-          calculation reflects current market conditions.
+          lender tier premiums). The live 30-year fixed rate is pulled weekly from Freddie
+          Mac's Primary Mortgage Market Survey so the calculation reflects current market conditions.
         </p>
       </section>
 
@@ -77,7 +78,8 @@ export default function About() {
           <li>Forecasts beyond 12 months are unreliable — we don't show them.</li>
           <li>Listing data is cached and may be up to 6 hours stale.</li>
           <li>Policy flags are manually curated and updated annually — they may lag recent legislation.</li>
-          <li>The affordability calculator uses a single fixed-rate mortgage model. ARMs, FHA, and VA loans are not modeled.</li>
+          <li>Listing map pins are approximate — when a listing has no precise coordinates we place it near the ZIP center.</li>
+          <li>We model conventional, FHA, VA, USDA, ARM 5/1, and jumbo loans, but eligibility rules (e.g. VA service requirements, USDA rural limits) are not verified — confirm with a lender.</li>
         </ul>
       </section>
     </div>

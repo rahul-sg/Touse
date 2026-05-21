@@ -3,18 +3,22 @@ ZIP-level endpoints:
   GET /api/v1/zip/lookup?zip=78701          → lat/lng + city/state
   GET /api/v1/zip/forecast?zip=78701        → price trend indicators
   GET /api/v1/zip/nearest?lat=30.27&lng=-97.74 → nearest ZIP to coordinates
+  GET /api/v1/zip/projection?zip=78701      → 12-month Prophet price forecast
+  GET /api/v1/zip/market-context?zip=78701  → national + state economic indicators
 """
 import math
 from fastapi import APIRouter, Request, Query, Depends, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import select, text
+from sqlalchemy import select, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, timedelta
 
 from app.db import get_db
 from app.models.zip_centroid import ZipCentroid
 from app.models.zip_price_history import ZipPriceHistory
+from app.models.macro_indicator import MacroIndicator
+from app.services.zip_projection import get_or_train
 
 router = APIRouter(prefix="/api/v1/zip", tags=["zip"])
 limiter = Limiter(key_func=get_remote_address)
@@ -176,4 +180,100 @@ async def zip_forecast(
         "trend_12m_pct": trend_12m,
         "direction": direction,
         "data_points": len(prices),
+    }
+
+
+# ── ZIP Prophet projection (12-month ML forecast) ──────────────────────────────
+
+@router.get("/projection")
+@limiter.limit("20/minute")
+async def zip_projection(
+    request: Request,
+    zip: str = Query(..., min_length=3, max_length=10),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a 12-month Prophet price projection for a ZIP code.
+
+    Trains the model on demand the first time a ZIP is requested (a few
+    seconds), then serves the cached result instantly on later requests.
+    """
+    zip_clean = zip.strip().zfill(5)
+    result = await get_or_train(zip_clean, db)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Not enough price history to build a projection for ZIP {zip}.",
+        )
+    return result
+
+
+# ── National + state market context ────────────────────────────────────────────
+
+async def _latest_macro(
+    db: AsyncSession, series_name: str, geo_id: str = "US"
+) -> tuple[float | None, date | None]:
+    """Return (value, date) for the most recent observation of a macro series."""
+    row = (
+        await db.execute(
+            select(MacroIndicator.value, MacroIndicator.date)
+            .where(
+                MacroIndicator.series_name == series_name,
+                MacroIndicator.geo_id == geo_id,
+            )
+            .order_by(desc(MacroIndicator.date))
+            .limit(1)
+        )
+    ).first()
+    return (float(row[0]), row[1]) if row else (None, None)
+
+
+@router.get("/market-context")
+@limiter.limit("60/minute")
+async def market_context(
+    request: Request,
+    zip: str = Query(..., min_length=3, max_length=10),
+    db: AsyncSession = Depends(get_db),
+):
+    """National + state-level economic indicators relevant to a ZIP's market."""
+    zip_clean = zip.strip().zfill(5)
+
+    state_code = await db.scalar(
+        select(ZipCentroid.state_code).where(ZipCentroid.zip_code == zip_clean)
+    )
+
+    mortgage_rate, mortgage_date = await _latest_macro(db, "mortgage_rate_30y")
+    unemployment, _ = await _latest_macro(db, "unemployment")
+    fed_funds, _ = await _latest_macro(db, "fed_funds_rate")
+
+    # CPI is stored as the raw index — derive year-over-year inflation.
+    latest_cpi, cpi_date = await _latest_macro(db, "cpi")
+    cpi_yoy_pct: float | None = None
+    if latest_cpi is not None and cpi_date is not None:
+        prior = await db.scalar(
+            select(MacroIndicator.value)
+            .where(
+                MacroIndicator.series_name == "cpi",
+                MacroIndicator.geo_id == "US",
+                MacroIndicator.date <= cpi_date - timedelta(days=350),
+            )
+            .order_by(desc(MacroIndicator.date))
+            .limit(1)
+        )
+        if prior:
+            cpi_yoy_pct = round((latest_cpi - float(prior)) / float(prior) * 100, 1)
+
+    state_gdp_pct, state_gdp_date = (None, None)
+    if state_code:
+        state_gdp_pct, state_gdp_date = await _latest_macro(db, "gdp_growth", state_code)
+
+    return {
+        "zip_code": zip_clean,
+        "state_code": state_code,
+        "mortgage_rate_30y": round(mortgage_rate, 2) if mortgage_rate is not None else None,
+        "mortgage_rate_as_of": mortgage_date.isoformat() if mortgage_date else None,
+        "cpi_yoy_pct": cpi_yoy_pct,
+        "unemployment_pct": round(unemployment, 1) if unemployment is not None else None,
+        "fed_funds_rate": round(fed_funds, 2) if fed_funds is not None else None,
+        "state_gdp_growth_pct": round(state_gdp_pct, 1) if state_gdp_pct is not None else None,
+        "state_gdp_year": state_gdp_date.year if state_gdp_date else None,
     }

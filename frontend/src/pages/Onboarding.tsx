@@ -218,6 +218,7 @@ const CREDIT_OPTIONS = [
 ]
 
 function Step2({ userId, onSuccess }: { userId: number; onSuccess: () => void }) {
+  const { updateTargetZip } = useAuth()
   const [serverError, setServerError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -261,6 +262,10 @@ function Step2({ userId, onSuccess }: { userId: number; onSuccess: () => void })
         retirement_value: retirement || undefined,
         monthly_take_home: Number(data.monthly_take_home) || undefined,
       })
+      // Keep the AuthContext in sync so MapView can center on the new ZIP
+      if (data.zip_code) {
+        updateTargetZip(data.zip_code)
+      }
       onSuccess()
     } catch {
       setServerError('Could not save your profile. Please try again.')

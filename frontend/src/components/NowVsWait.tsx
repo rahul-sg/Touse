@@ -5,8 +5,6 @@ import styles from './NowVsWait.module.css'
 
 interface Props {
   profile: UserProfile
-  currentMaxPrice: number
-  currentRate: number
   loanType?: string
 }
 
@@ -25,7 +23,7 @@ const REC_CONFIG = {
   neutral: { label: 'Either path works', color: 'var(--color-text-secondary)' },
 }
 
-export default function NowVsWait({ profile, currentMaxPrice, currentRate, loanType }: Props) {
+export default function NowVsWait({ profile, loanType }: Props) {
   const monthlyDebt =
     (profile.monthly_debt_car ?? 0) +
     (profile.monthly_debt_student ?? 0) +
@@ -41,6 +39,8 @@ export default function NowVsWait({ profile, currentMaxPrice, currentRate, loanT
   const [result, setResult] = useState<NowVsWaitResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+
+  const profileIncomplete = !profile.annual_income || !profile.down_payment || !profile.credit_score
 
   const run = useCallback(async (savings: number) => {
     if (!profile.annual_income || !profile.down_payment || !profile.credit_score) return
@@ -103,12 +103,23 @@ export default function NowVsWait({ profile, currentMaxPrice, currentRate, loanT
           />
           <span className={styles.suffix}>/mo</span>
         </div>
-        <button className={styles.runBtn} onClick={handleRun} disabled={loading}>
+        <button
+          className={styles.runBtn}
+          onClick={handleRun}
+          disabled={loading || profileIncomplete}
+          title={profileIncomplete ? 'Complete your financial profile to use this tool' : undefined}
+        >
           {loading ? 'Calculating…' : 'Compare →'}
         </button>
       </div>
 
-      {error && (
+      {profileIncomplete && (
+        <p className={styles.errorMsg}>
+          Complete your financial profile (income, down payment, credit score) to use this comparison.
+        </p>
+      )}
+
+      {!profileIncomplete && error && (
         <p className={styles.errorMsg}>Could not run comparison. Please try again.</p>
       )}
 

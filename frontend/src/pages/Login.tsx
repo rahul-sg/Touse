@@ -34,6 +34,7 @@ export default function Login() {
         username: result.username,
         first_name: result.first_name,
         access_token: result.access_token,
+        target_zip: result.target_zip ?? null,
       })
       navigate('/dashboard')
     } catch (err: unknown) {

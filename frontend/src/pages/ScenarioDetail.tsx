@@ -85,6 +85,7 @@ export default function ScenarioDetail() {
     if (!scenario || scenario.annual_income == null) return
     setReadinessLoading(true)
     getReadiness({
+      scenario_type: scenario.scenario_type,
       annual_income: scenario.annual_income,
       savings: scenario.savings ?? 0,
       down_payment: scenario.down_payment ?? 0,
@@ -94,7 +95,9 @@ export default function ScenarioDetail() {
       monthly_debt_credit: scenario.monthly_debt_credit,
       monthly_debt_other: scenario.monthly_debt_other,
       cached_max_price: scenario.cached_max_price ?? undefined,
+      cached_monthly_payment: scenario.cached_monthly_payment ?? undefined,
       rate_used: scenario.cached_rate_used ?? undefined,
+      target_zip: scenario.zip_code ?? undefined,
     })
       .then(setReadiness)
       .catch(() => setReadiness(null))
@@ -110,7 +113,10 @@ export default function ScenarioDetail() {
     scenario?.monthly_debt_credit,
     scenario?.monthly_debt_other,
     scenario?.cached_max_price,
+    scenario?.cached_monthly_payment,
     scenario?.cached_rate_used,
+    scenario?.zip_code,
+    scenario?.scenario_type,
   ])
 
   if (!isLoggedIn) {
@@ -250,7 +256,7 @@ export default function ScenarioDetail() {
                   <span className={styles.breakdownLabel}>Credit score</span>
                   <span className={styles.breakdownVal}>
                     {scenario.credit_score ?? '—'}
-                    {readiness && <span className={styles.creditLabel}> · {readiness.creditLabel}</span>}
+                    {readiness && <span className={styles.creditLabel}> · {readiness.credit_label}</span>}
                   </span>
                 </div>
               </div>
@@ -297,6 +303,7 @@ export default function ScenarioDetail() {
                     maxPrice: scenario.cached_max_price ?? 600_000,
                     scenarioName: scenario.name,
                     scenarioId: scenario.id,
+                    targetZip: scenario.zip_code ?? undefined,
                   },
                 })
               }
@@ -319,35 +326,16 @@ export default function ScenarioDetail() {
                   <ScoreRing score={readiness.score} />
 
                   <div className={styles.scoreBreakdown}>
-                    <div className={styles.scoreRow}>
-                      <span className={styles.scoreRowLabel}>Debt-to-income</span>
-                      <div className={styles.scoreBar}>
-                        <div className={styles.scoreBarFill} style={{ width: `${(readiness.components.dti_pts / 35) * 100}%` }} />
+                    {readiness.components.map((c) => (
+                      <div key={c.label} className={styles.scoreRow}>
+                        <span className={styles.scoreRowLabel}>{c.label}</span>
+                        <div className={styles.scoreBar}>
+                          <div className={styles.scoreBarFill} style={{ width: `${(c.points / c.max) * 100}%` }} />
+                        </div>
+                        <span className={styles.scoreRowPts}>{c.points}/{c.max}</span>
                       </div>
-                      <span className={styles.scoreRowPts}>{readiness.components.dti_pts}/35</span>
-                    </div>
-                    <div className={styles.scoreRow}>
-                      <span className={styles.scoreRowLabel}>Down payment</span>
-                      <div className={styles.scoreBar}>
-                        <div className={styles.scoreBarFill} style={{ width: `${(readiness.components.dp_pts / 25) * 100}%` }} />
-                      </div>
-                      <span className={styles.scoreRowPts}>{readiness.components.dp_pts}/25</span>
-                    </div>
-                    <div className={styles.scoreRow}>
-                      <span className={styles.scoreRowLabel}>Credit score</span>
-                      <div className={styles.scoreBar}>
-                        <div className={styles.scoreBarFill} style={{ width: `${(readiness.components.credit_pts / 25) * 100}%` }} />
-                      </div>
-                      <span className={styles.scoreRowPts}>{readiness.components.credit_pts}/25</span>
-                    </div>
-                    <div className={styles.scoreRow}>
-                      <span className={styles.scoreRowLabel}>Savings cushion</span>
-                      <div className={styles.scoreBar}>
-                        <div className={styles.scoreBarFill} style={{ width: `${(readiness.components.cushion_pts / 15) * 100}%` }} />
-                      </div>
-                      <span className={styles.scoreRowPts}>{readiness.components.cushion_pts}/15</span>
-                    </div>
-                    {readiness.rate_used > 6.5 && (
+                    ))}
+                    {readiness.scenario_type === 'buy' && readiness.rate_used > 6.5 && (
                       <p className={styles.rateNote}>
                         DTI ceiling tightened to {readiness.dti_ceiling_pct}% at current {readiness.rate_used.toFixed(2)}% rates
                       </p>

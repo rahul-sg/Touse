@@ -27,13 +27,21 @@ export default function Navbar() {
             Map
           </NavLink>
         )}
+        {!isLoggedIn && (
+          <NavLink to="/calculator" className={({ isActive }) => (isActive ? styles.active : '')}>
+            Quick calculator
+          </NavLink>
+        )}
         <NavLink to="/about" className={({ isActive }) => (isActive ? styles.active : '')}>
           About
         </NavLink>
         {isLoggedIn ? (
-          <button className={styles.signOutBtn} onClick={handleLogout}>
-            {user?.first_name ? `Sign out` : 'Sign out'}
-          </button>
+          <>
+            {user?.first_name && <span className={styles.userName}>Hi, {user.first_name}</span>}
+            <button className={styles.signOutBtn} onClick={handleLogout}>
+              Sign out
+            </button>
+          </>
         ) : (
           <NavLink to="/login" className={styles.signInBtn}>
             Sign in

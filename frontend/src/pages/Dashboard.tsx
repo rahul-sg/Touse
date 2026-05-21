@@ -80,6 +80,7 @@ export default function Dashboard() {
               // Fetch backend readiness score using the actual rate + max price
               try {
                 const r = await getReadiness({
+                  scenario_type: 'buy',
                   annual_income: me.annual_income!,
                   savings: me.savings ?? 0,
                   down_payment: me.down_payment ?? 0,
@@ -89,6 +90,7 @@ export default function Dashboard() {
                   monthly_debt_credit: me.monthly_debt_credit,
                   monthly_debt_other: me.monthly_debt_other,
                   cached_max_price: aff.max_price,
+                  cached_monthly_payment: aff.monthly_payment,
                   rate_used: aff.rate_used,
                   liquid_savings: me.liquid_savings ?? undefined,
                   target_zip: me.zip_code ?? undefined,
@@ -129,6 +131,7 @@ export default function Dashboard() {
 
   function handleScenarioCreated(s: Scenario) {
     setActiveScenarioId(s.id)
+    setActiveTab('scenarios')  // switch to My Scenarios tab so the new scenario is visible
     refetchScenarios()
   }
 
@@ -206,22 +209,26 @@ export default function Dashboard() {
               {!isLoading && hasProfile && result && profile && (
                 <NowVsWait
                   profile={profile}
-                  currentMaxPrice={result.max_price}
-                  currentRate={result.rate_used}
                   loanType={result.loan_type}
                 />
               )}
 
               {/* Quick actions */}
               <div className={styles.quickActions}>
-                <Link to="/map" className={styles.actionCard}>
+                <Link
+                  to="/map"
+                  state={result ? { maxPrice: result.max_price } : undefined}
+                  className={styles.actionCard}
+                >
                   <span className={styles.actionIcon}>🗺</span>
                   <span className={styles.actionLabel}>Browse the map</span>
                 </Link>
-                <Link to="/forecast/austin-tx" className={styles.actionCard}>
-                  <span className={styles.actionIcon}>📈</span>
-                  <span className={styles.actionLabel}>Market forecast</span>
-                </Link>
+                {profile?.zip_code && (
+                  <Link to={`/forecast/${profile.zip_code}`} className={styles.actionCard}>
+                    <span className={styles.actionIcon}>📈</span>
+                    <span className={styles.actionLabel}>ZIP price forecast</span>
+                  </Link>
+                )}
                 <button
                   className={styles.actionCard}
                   onClick={() => setShowForm(true)}
@@ -275,33 +282,21 @@ export default function Dashboard() {
 
                 {/* Component breakdown */}
                 <div className={styles.scoreBreakdown}>
-                  <div className={styles.scoreRow}>
-                    <span className={styles.scoreRowLabel}>Debt-to-income</span>
-                    <span className={styles.scoreRowPts}>{readiness.components.dti_pts}<span className={styles.scoreRowMax}>/30</span></span>
-                  </div>
-                  <div className={styles.scoreRow}>
-                    <span className={styles.scoreRowLabel}>Down payment</span>
-                    <span className={styles.scoreRowPts}>{readiness.components.dp_pts}<span className={styles.scoreRowMax}>/20</span></span>
-                  </div>
-                  <div className={styles.scoreRow}>
-                    <span className={styles.scoreRowLabel}>Credit score</span>
-                    <span className={styles.scoreRowPts}>{readiness.components.credit_pts}<span className={styles.scoreRowMax}>/20</span></span>
-                  </div>
-                  <div className={styles.scoreRow}>
-                    <span className={styles.scoreRowLabel}>Savings cushion</span>
-                    <span className={styles.scoreRowPts}>{readiness.components.cushion_pts}<span className={styles.scoreRowMax}>/15</span></span>
-                  </div>
-                  {readiness.market_fit_label && (
-                    <div className={styles.scoreRow}>
+                  {readiness.components.map((c) => (
+                    <div key={c.label} className={styles.scoreRow}>
                       <span className={styles.scoreRowLabel}>
-                        Market fit
-                        <span className={`${styles.marketFitBadge} ${styles[`marketFit${readiness.market_fit_label.replace(' ', '')}`]}`}>
-                          {readiness.market_fit_label}
-                        </span>
+                        {c.label}
+                        {c.label === 'Market fit' && readiness.market_fit_label && (
+                          <span className={`${styles.marketFitBadge} ${styles[`marketFit${readiness.market_fit_label.replace(' ', '')}`]}`}>
+                            {readiness.market_fit_label}
+                          </span>
+                        )}
                       </span>
-                      <span className={styles.scoreRowPts}>{readiness.components.market_fit_pts}<span className={styles.scoreRowMax}>/15</span></span>
+                      <span className={styles.scoreRowPts}>
+                        {c.points}<span className={styles.scoreRowMax}>/{c.max}</span>
+                      </span>
                     </div>
-                  )}
+                  ))}
                 </div>
 
                 {readiness.actions.length > 0 && (

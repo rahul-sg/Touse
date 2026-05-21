@@ -1,18 +1,12 @@
-import os
-from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
-from jose import jwt, JWTError
 
 from app.db import get_db
 from app.models.user import User
-
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 30
+from app.security import create_access_token, get_current_user_id, require_self
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -63,11 +57,6 @@ class TokenResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────
 
-def _make_token(user_id: int) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
-
-
 def _verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
@@ -107,7 +96,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     return TokenResponse(
-        access_token=_make_token(user.id),
+        access_token=create_access_token(user.id),
         user_id=user.id,
         username=user.username,
         first_name=user.first_name,
@@ -123,7 +112,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return TokenResponse(
-        access_token=_make_token(user.id),
+        access_token=create_access_token(user.id),
         user_id=user.id,
         username=user.username,
         first_name=user.first_name,
@@ -131,19 +120,14 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/profile")
-async def save_profile(body: ProfileRequest, db: AsyncSession = Depends(get_db)):
-    """Save financial profile — called with Authorization header carrying the JWT."""
-    from fastapi import Request
-    raise HTTPException(status_code=501, detail="Use /profile-authed endpoint")
-
-
 @router.post("/profile/{user_id}")
 async def save_profile_for_user(
     user_id: int,
     body: ProfileRequest,
     db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
+    require_self(user_id, current_user_id)
     user = await _get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -186,7 +170,12 @@ async def save_profile_for_user(
 
 
 @router.get("/me/{user_id}")
-async def get_me(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_me(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    require_self(user_id, current_user_id)
     user = await _get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -218,7 +207,9 @@ async def update_target_zip(
     user_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
+    require_self(user_id, current_user_id)
     user = await _get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

@@ -53,6 +53,7 @@ export interface Listing {
   lat: number
   lng: number
   listing_url: string
+  photo_url?: string | null
 }
 
 export interface MarketIndicators {
@@ -94,21 +95,23 @@ export interface UserProfile {
   monthly_take_home: number | null
 }
 
+export interface ReadinessComponent {
+  label: string
+  points: number
+  max: number
+}
+
 export interface ReadinessResult {
   score: number
-  components: {
-    dti_pts: number
-    dp_pts: number
-    credit_pts: number
-    cushion_pts: number
-  }
+  scenario_type: 'buy' | 'rent'
+  components: ReadinessComponent[]
   dti_ratio_pct: number
   dti_ceiling_pct: number
-  dp_pct: number
-  cushion_months: number
   credit_label: string
   rate_used: number
-  target_price: number
+  market_median: number | null
+  market_fit_label: string | null
+  market_fit_ratio_pct: number | null
   actions: string[]
 }
 

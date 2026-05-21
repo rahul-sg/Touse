@@ -1,10 +1,39 @@
 import axios from 'axios'
-import type { Scenario, RentalAffordability } from '../types'
+import type { Scenario, RentalAffordability, ReadinessResult } from '../types'
+
+// Must match STORAGE_KEY in AuthContext.tsx
+const AUTH_STORAGE_KEY = 'touse_auth'
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
   headers: { 'Content-Type': 'application/json' },
 })
+
+// Attach the JWT (stored by AuthContext) as a Bearer token on every request.
+api.interceptors.request.use((config) => {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY)
+    const token = raw ? JSON.parse(raw)?.access_token : null
+    if (token) config.headers.Authorization = `Bearer ${token}`
+  } catch {
+    // malformed storage — proceed unauthenticated
+  }
+  return config
+})
+
+// On 401 (expired/invalid session) clear the stored auth and bounce to login.
+api.interceptors.response.use(
+  (resp) => resp,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  },
+)
 
 export interface RegisterPayload {
   first_name: string
@@ -41,6 +70,7 @@ export interface AuthResponse {
 }
 
 export interface ReadinessRequest {
+  scenario_type?: 'buy' | 'rent'
   annual_income: number
   savings?: number
   down_payment?: number
@@ -50,32 +80,14 @@ export interface ReadinessRequest {
   monthly_debt_credit?: number
   monthly_debt_other?: number
   cached_max_price?: number
+  cached_monthly_payment?: number
   rate_used?: number
   liquid_savings?: number
   target_zip?: string
 }
 
-export interface ReadinessResult {
-  score: number
-  components: {
-    dti_pts: number
-    dp_pts: number
-    credit_pts: number
-    cushion_pts: number
-    market_fit_pts: number
-  }
-  dti_ratio_pct: number
-  dti_ceiling_pct: number
-  dp_pct: number
-  cushion_months: number
-  credit_label: string
-  rate_used: number
-  target_price: number
-  market_median: number | null
-  market_fit_label: string | null
-  market_fit_ratio_pct: number | null
-  actions: string[]
-}
+// Re-export so callers can import ReadinessResult from either api.ts or types/index.ts
+export type { ReadinessResult }
 
 export async function register(payload: RegisterPayload): Promise<AuthResponse> {
   const { data } = await api.post<AuthResponse>('/api/v1/auth/register', payload)
@@ -167,6 +179,40 @@ export async function getZipForecast(zip: string): Promise<{
   direction: string; data_points: number
 }> {
   const { data } = await api.get(`/api/v1/zip/forecast`, { params: { zip } })
+  return data
+}
+
+export interface ZipProjection {
+  zip_code: string
+  model_version: string
+  trained_at: string
+  current_value: number
+  forecast_12m_pct: number | null
+  data_points: number
+  forecast_12m: { month: string; price: number; lower: number; upper: number }[]
+}
+
+/** 12-month Prophet price projection for a ZIP (trains on demand — first call is slow). */
+export async function getZipProjection(zip: string): Promise<ZipProjection> {
+  const { data } = await api.get<ZipProjection>('/api/v1/zip/projection', { params: { zip } })
+  return data
+}
+
+export interface MarketContext {
+  zip_code: string
+  state_code: string | null
+  mortgage_rate_30y: number | null
+  mortgage_rate_as_of: string | null
+  cpi_yoy_pct: number | null
+  unemployment_pct: number | null
+  fed_funds_rate: number | null
+  state_gdp_growth_pct: number | null
+  state_gdp_year: number | null
+}
+
+/** National + state-level economic indicators relevant to a ZIP's market. */
+export async function getMarketContext(zip: string): Promise<MarketContext> {
+  const { data } = await api.get<MarketContext>('/api/v1/zip/market-context', { params: { zip } })
   return data
 }
 

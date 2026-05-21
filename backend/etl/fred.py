@@ -1,6 +1,10 @@
 """
 FRED API ingestion.
-Fetches mortgage rates, CPI, housing starts, Fed funds rate, unemployment.
+Fetches CPI, housing starts, Fed funds rate, unemployment. Requires FRED_API_KEY.
+
+NOTE: the 30-year mortgage rate is NOT pulled here — it comes from Freddie Mac's
+key-free PMMS feed (see etl/freddie_mac.py), the authoritative survey FRED itself
+mirrors. This keeps the live mortgage rate working without any API key.
 Source: https://fred.stlouisfed.org/docs/api/fred/
 """
 import os
@@ -15,8 +19,8 @@ from etl.db import get_session
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 
+# mortgage_rate_30y intentionally omitted — see etl/freddie_mac.py
 SERIES = {
-    "mortgage_rate_30y": "MORTGAGE30US",
     "fed_funds_rate": "FEDFUNDS",
     "cpi": "CPIAUCSL",
     "housing_starts": "HOUST",

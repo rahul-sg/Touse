@@ -1,8 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import ForecastChart from '../components/ForecastChart'
-import MarketIndicatorsPanel from '../components/MarketIndicatorsPanel'
-import { useForecast } from '../hooks/useForecast'
-import { useMarket } from '../hooks/useMarket'
+import { getZipForecast, getZipProjection, getMarketContext } from '../utils/api'
+import type { ZipProjection, MarketContext } from '../utils/api'
 import styles from './Forecast.module.css'
 
 function fmt(n: number | null) {
@@ -10,130 +10,183 @@ function fmt(n: number | null) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
-function fmtTrend(n: number | null) {
+function fmtTrend(n: number | null | undefined) {
   if (n == null) return '—'
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 }
 
+function fmtPct(n: number | null | undefined) {
+  if (n == null) return '—'
+  return `${n.toFixed(n % 1 === 0 ? 0 : 1)}%`
+}
+
+interface ZipTrends {
+  zip_code: string
+  city: string | null
+  state: string | null
+  metro: string | null
+  current_median_value: number
+  as_of: string
+  trend_3m_pct: number | null
+  trend_12m_pct: number | null
+  direction: string
+}
+
 export default function Forecast() {
-  const { metroId } = useParams<{ metroId: string }>()
-  const { data: forecast, isLoading: forecastLoading, isError: forecastError } = useForecast(metroId ?? null)
-  const { data: market, isLoading: marketLoading } = useMarket(metroId ?? null)
+  const { zip } = useParams<{ zip: string }>()
 
-  const metroName = metroId
-    ? metroId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    : ''
+  const [trends, setTrends] = useState<ZipTrends | null>(null)
+  const [projection, setProjection] = useState<ZipProjection | null>(null)
+  const [marketContext, setMarketContext] = useState<MarketContext | null>(null)
+  const [trendsLoading, setTrendsLoading] = useState(true)
+  const [projLoading, setProjLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const trend3m = forecast?.trend_3m ?? null
-  const trend12m = forecast?.trend_12m ?? null
+  useEffect(() => {
+    if (!zip) return
+    setTrendsLoading(true)
+    setProjLoading(true)
+    setError(null)
+    setTrends(null)
+    setProjection(null)
+    setMarketContext(null)
+
+    getZipForecast(zip)
+      .then(setTrends)
+      .catch(() => setError('No price history is available for this ZIP code yet.'))
+      .finally(() => setTrendsLoading(false))
+
+    // The projection trains a Prophet model on first request (a few seconds).
+    getZipProjection(zip)
+      .then(setProjection)
+      .catch(() => setProjection(null))
+      .finally(() => setProjLoading(false))
+
+    getMarketContext(zip)
+      .then(setMarketContext)
+      .catch(() => setMarketContext(null))
+  }, [zip])
+
+  const place = trends ? [trends.city, trends.state].filter(Boolean).join(', ') : ''
+  const proj12m = projection?.forecast_12m_pct ?? null
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.breadcrumb}>
-          <Link to="/">Home</Link>
+          <Link to="/dashboard">Dashboard</Link>
           <span>/</span>
-          <span>Forecast</span>
+          <span>ZIP forecast</span>
         </div>
 
-        <h1 className={styles.title}>{metroName || 'Metro Forecast'}</h1>
+        <h1 className={styles.title}>{place || `ZIP ${zip}`}</h1>
 
         <div className={styles.statShelf}>
           <div className={styles.statCell}>
-            <p className={styles.statCellLabel}>Median Price</p>
+            <p className={styles.statCellLabel}>Median Home Value</p>
             <p className={`${styles.statCellValue} ${styles.brass}`}>
-              {fmt(forecast?.current_median_price ?? null)}
+              {fmt(trends?.current_median_value ?? null)}
             </p>
           </div>
           <div className={styles.statCell}>
             <p className={styles.statCellLabel}>3-Month Trend</p>
-            <p className={`${styles.statCellValue} ${trend3m == null ? '' : trend3m >= 0 ? styles.up : styles.down}`}>
-              {fmtTrend(trend3m)}
+            <p className={`${styles.statCellValue} ${trends?.trend_3m_pct == null ? '' : trends.trend_3m_pct >= 0 ? styles.up : styles.down}`}>
+              {fmtTrend(trends?.trend_3m_pct)}
             </p>
           </div>
           <div className={styles.statCell}>
             <p className={styles.statCellLabel}>12-Month Trend</p>
-            <p className={`${styles.statCellValue} ${trend12m == null ? '' : trend12m >= 0 ? styles.up : styles.down}`}>
-              {fmtTrend(trend12m)}
+            <p className={`${styles.statCellValue} ${trends?.trend_12m_pct == null ? '' : trends.trend_12m_pct >= 0 ? styles.up : styles.down}`}>
+              {fmtTrend(trends?.trend_12m_pct)}
             </p>
           </div>
-          {forecast?.trained_at && (
-            <div className={styles.statCell} style={{ flex: '0 0 auto' }}>
-              <p className={styles.statCellLabel}>Model</p>
-              <p className={styles.statCellSub}>
-                {forecast.model_version ?? '—'}<br />
-                Trained {new Date(forecast.trained_at).toLocaleDateString()}
-              </p>
-            </div>
-          )}
+          <div className={styles.statCell}>
+            <p className={styles.statCellLabel}>Projected (next 12mo)</p>
+            <p className={`${styles.statCellValue} ${proj12m == null ? '' : proj12m >= 0 ? styles.up : styles.down}`}>
+              {projLoading ? '…' : fmtTrend(proj12m)}
+            </p>
+          </div>
         </div>
       </header>
 
-      {forecastError && (
-        <div className={styles.error}>
-          Could not load forecast for this metro. It may not exist in the database yet.
-        </div>
-      )}
+      {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.body}>
         <section className={styles.chartSection}>
           <h2 className={styles.sectionTitle}>12-Month Price Forecast</h2>
           <p className={styles.sectionSub}>
-            Shaded area shows 80% confidence interval. Dashed line marks today's median.
+            Prophet time-series model trained on this ZIP's full price history.
+            Shaded area is the 80% confidence interval; the dashed line marks today's value.
           </p>
 
-          {forecastLoading ? (
-            <div className={styles.loading}><div className={styles.spinner} /></div>
+          {projLoading ? (
+            <div className={styles.loading}>
+              <div className={styles.spinner} />
+              <p style={{ marginTop: '0.75rem' }}>Training the forecast model…</p>
+            </div>
           ) : (
             <ForecastChart
-              forecast={forecast?.forecast_12m ?? []}
-              currentPrice={forecast?.current_median_price ?? null}
+              forecast={projection?.forecast_12m ?? []}
+              currentPrice={projection?.current_value ?? trends?.current_median_value ?? null}
             />
           )}
 
-          {forecast?.top_drivers && Object.keys(forecast.top_drivers).length > 0 && (
-            <div className={styles.drivers}>
-              <h3 className={styles.driversTitle}>Key Inflection Points</h3>
-              <div className={styles.driversGrid}>
-                {forecast.top_drivers.strongest_growth_periods?.length > 0 && (
-                  <div className={styles.driverGroup}>
-                    <span className={styles.driverLabel}>Strongest growth</span>
-                    <div className={styles.driverTags}>
-                      {forecast.top_drivers.strongest_growth_periods.map((m: string) => (
-                        <span key={m} className={`${styles.tag} ${styles.tagUp}`}>{m}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {forecast.top_drivers.strongest_decline_periods?.length > 0 && (
-                  <div className={styles.driverGroup}>
-                    <span className={styles.driverLabel}>Sharpest declines</span>
-                    <div className={styles.driverTags}>
-                      {forecast.top_drivers.strongest_decline_periods.map((m: string) => (
-                        <span key={m} className={`${styles.tag} ${styles.tagDown}`}>{m}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          {projection && (
+            <p className={styles.sectionSub} style={{ marginTop: '1rem' }}>
+              Model: Prophet · trained on {projection.data_points} months of history ·
+              last updated {new Date(projection.trained_at).toLocaleDateString()}.
+            </p>
           )}
         </section>
 
         <aside className={styles.sidebar}>
-          {marketLoading ? (
-            <div className={styles.loading}><div className={styles.spinner} /></div>
-          ) : market ? (
-            <MarketIndicatorsPanel indicators={market} />
-          ) : null}
+          {marketContext && (
+            <div className={styles.contextCard}>
+              <h3 className={styles.contextTitle}>Market Context</h3>
+              <div className={styles.contextRow}>
+                <span className={styles.contextLabel}>30-yr mortgage rate</span>
+                <span className={styles.contextValue}>{fmtPct(marketContext.mortgage_rate_30y)}</span>
+              </div>
+              <div className={styles.contextRow}>
+                <span className={styles.contextLabel}>Inflation (CPI, year-over-year)</span>
+                <span className={styles.contextValue}>{fmtPct(marketContext.cpi_yoy_pct)}</span>
+              </div>
+              <div className={styles.contextRow}>
+                <span className={styles.contextLabel}>US unemployment</span>
+                <span className={styles.contextValue}>{fmtPct(marketContext.unemployment_pct)}</span>
+              </div>
+              {marketContext.state_gdp_growth_pct != null && (
+                <div className={styles.contextRow}>
+                  <span className={styles.contextLabel}>
+                    {marketContext.state_code} GDP growth
+                    {marketContext.state_gdp_year ? ` (${marketContext.state_gdp_year})` : ''}
+                  </span>
+                  <span className={`${styles.contextValue} ${marketContext.state_gdp_growth_pct >= 0 ? styles.up : styles.down}`}>
+                    {fmtTrend(marketContext.state_gdp_growth_pct)}
+                  </span>
+                </div>
+              )}
+              <p className={styles.contextNote}>
+                National figures from FRED &amp; Freddie Mac; state GDP from the BEA.
+              </p>
+            </div>
+          )}
 
           <div className={styles.mapLink}>
-            <Link to={`/map`} className={styles.mapLinkBtn}>
-              Browse listings in this area →
+            <Link
+              to="/map"
+              state={zip ? { targetZip: zip } : undefined}
+              className={styles.mapLinkBtn}
+            >
+              Browse listings in {place || `ZIP ${zip}`} →
             </Link>
           </div>
         </aside>
       </div>
+
+      {trendsLoading && !trends && !error && (
+        <div className={styles.loading}><div className={styles.spinner} /></div>
+      )}
     </div>
   )
 }

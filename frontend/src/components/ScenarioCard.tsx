@@ -9,6 +9,15 @@ interface Props {
   onDelete: () => void
 }
 
+const LOAN_LABEL: Record<string, string> = {
+  conventional: 'Conventional',
+  fha: 'FHA',
+  va: 'VA',
+  usda: 'USDA',
+  arm_5_1: 'ARM 5/1',
+  jumbo: 'Jumbo',
+}
+
 function fmtPrice(n: number, type: 'buy' | 'rent'): string {
   if (type === 'rent') {
     return `$${n.toLocaleString()}/mo`
@@ -32,7 +41,7 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
           </span>
           {scenario.scenario_type === 'buy' && scenario.loan_type && scenario.loan_type !== 'conventional' && (
             <span className={styles.badgeLoan}>
-              {scenario.loan_type.replace('_', ' ').toUpperCase()}
+              {LOAN_LABEL[scenario.loan_type] ?? scenario.loan_type.toUpperCase()}
             </span>
           )}
         </div>
@@ -58,7 +67,12 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
         </Link>
         <Link
           to="/map"
-          state={{ maxPrice: scenario.cached_max_price, scenarioId: scenario.id, scenarioName: scenario.name }}
+          state={{
+            maxPrice: scenario.cached_max_price,
+            scenarioId: scenario.id,
+            scenarioName: scenario.name,
+            targetZip: scenario.zip_code ?? undefined,
+          }}
           className={styles.mapBtn}
           onClick={e => e.stopPropagation()}
         >

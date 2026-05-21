@@ -136,3 +136,16 @@
   color: var(--color-text-muted);
   font-size: 0.72rem;
 }
+
+.forecastLink {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-forest);
+  text-decoration: none;
+}
+
+.forecastLink:hover {
+  text-decoration: underline;
+}

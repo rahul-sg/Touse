@@ -4,7 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.api import affordability, forecast, listings, market, regions
+from app.api import affordability, listings, regions
 from app.api import auth
 from app.api import scenarios, rental, readiness, compare, zip_forecast
 
@@ -32,15 +32,15 @@ app.add_middleware(
 )
 
 app.include_router(affordability.router, prefix="/api/v1")
-app.include_router(forecast.router, prefix="/api/v1")
 app.include_router(listings.router, prefix="/api/v1")
-app.include_router(market.router, prefix="/api/v1")
 app.include_router(regions.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(scenarios.router)
 app.include_router(rental.router)
 app.include_router(readiness.router)
 app.include_router(compare.router)
+# Metro-level forecasting was retired in favour of the ZIP-native pipeline
+# (zip_forecast.router → /api/v1/zip/projection, trained on zip_price_history).
 app.include_router(zip_forecast.router)
 
 

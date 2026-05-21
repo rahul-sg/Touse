@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.scenario import Scenario
+from app.security import get_current_user_id, require_self
 
 router = APIRouter(prefix="/api/v1/scenarios", tags=["scenarios"])
 
@@ -29,6 +30,7 @@ class ScenarioCreate(BaseModel):
 
 class ScenarioUpdate(BaseModel):
     name: str | None = None
+    scenario_type: str | None = None
     annual_income: float | None = None
     savings: float | None = None
     down_payment: float | None = None
@@ -69,7 +71,12 @@ def _serialize(s: Scenario) -> dict:
 
 
 @router.get("/user/{user_id}")
-async def list_scenarios(user_id: int, db: AsyncSession = Depends(get_db)):
+async def list_scenarios(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    require_self(user_id, current_user_id)
     result = await db.execute(
         select(Scenario)
         .where(Scenario.user_id == user_id)
@@ -80,7 +87,13 @@ async def list_scenarios(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/user/{user_id}", status_code=201)
-async def create_scenario(user_id: int, body: ScenarioCreate, db: AsyncSession = Depends(get_db)):
+async def create_scenario(
+    user_id: int,
+    body: ScenarioCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    require_self(user_id, current_user_id)
     scenario = Scenario(
         user_id=user_id,
         name=body.name,
@@ -106,11 +119,17 @@ async def create_scenario(user_id: int, body: ScenarioCreate, db: AsyncSession =
 
 
 @router.put("/{scenario_id}")
-async def update_scenario(scenario_id: int, body: ScenarioUpdate, db: AsyncSession = Depends(get_db)):
+async def update_scenario(
+    scenario_id: int,
+    body: ScenarioUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     result = await db.execute(select(Scenario).where(Scenario.id == scenario_id))
     scenario = result.scalar_one_or_none()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    require_self(scenario.user_id, current_user_id)
     for field, val in body.model_dump(exclude_none=True).items():
         setattr(scenario, field, val)
     await db.commit()
@@ -119,10 +138,15 @@ async def update_scenario(scenario_id: int, body: ScenarioUpdate, db: AsyncSessi
 
 
 @router.delete("/{scenario_id}", status_code=204)
-async def delete_scenario(scenario_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_scenario(
+    scenario_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     result = await db.execute(select(Scenario).where(Scenario.id == scenario_id))
     scenario = result.scalar_one_or_none()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    require_self(scenario.user_id, current_user_id)
     scenario.is_active = False
     await db.commit()
