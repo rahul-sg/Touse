@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel, EmailStr, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.contact_message import ContactMessage
 
 router = APIRouter(tags=["contact"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 class ContactRequest(BaseModel):

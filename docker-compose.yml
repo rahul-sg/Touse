@@ -23,6 +23,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://touse:touse@postgres:5432/touse
       - REDIS_URL=redis://redis:6379/0
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/1
       - FRED_API_KEY=${FRED_API_KEY}
       - BLS_API_KEY=${BLS_API_KEY}
       - BEA_API_KEY=${BEA_API_KEY}

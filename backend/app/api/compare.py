@@ -6,8 +6,7 @@ across three rate scenarios (flat / down 0.5% / up 0.5%).
 """
 from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -15,7 +14,6 @@ from app.services.affordability import _get_current_rate, _credit_score_premium
 from app.services.loan_calculators import LOAN_CALCULATORS, calc_conventional
 
 router = APIRouter(prefix="/api/v1", tags=["compare"])
-limiter = Limiter(key_func=get_remote_address)
 
 VALID_LOAN_TYPES = {"conventional", "fha", "va", "usda", "arm_5_1", "jumbo"}
 

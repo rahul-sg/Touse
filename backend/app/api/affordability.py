@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services.affordability import calculate_affordability
 
 router = APIRouter(tags=["affordability"])
-limiter = Limiter(key_func=get_remote_address)
 
 VALID_LOAN_TYPES = {"conventional", "fha", "va", "usda", "arm_5_1", "jumbo"}
 

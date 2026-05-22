@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Request, Query, Depends
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services.listings import get_listings
 
 router = APIRouter(tags=["listings"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/listings")

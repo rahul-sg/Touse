@@ -8,8 +8,7 @@ ZIP-level endpoints:
 """
 import math
 from fastapi import APIRouter, Request, Query, Depends, HTTPException
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy import select, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, timedelta
@@ -21,7 +20,6 @@ from app.models.macro_indicator import MacroIndicator
 from app.services.zip_projection import get_or_train
 
 router = APIRouter(prefix="/api/v1/zip", tags=["zip"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

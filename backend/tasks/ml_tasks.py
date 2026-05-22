@@ -2,9 +2,8 @@
 Celery task for keeping ZIP price forecasts fresh.
 
 ZIP forecasts are trained on demand and cached in zip_forecast_results with a
-30-day TTL. This task proactively re-trains every ZIP a user has already
-viewed, so popular ZIPs never go stale and returning users skip the
-~1-2s on-demand training wait.
+30-day TTL. This task proactively re-trains the stalest cached forecasts so
+popular ZIPs never go stale and returning users skip the on-demand training wait.
 """
 import os
 from datetime import datetime
@@ -16,10 +15,15 @@ _DB_URL = os.environ.get(
     "postgresql+asyncpg://touse:touse@localhost:5432/touse",
 ).replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
+# Cap per run — each Prophet fit takes ~1-2s, so retraining every cached ZIP
+# would run for hours once the cache holds thousands. The stalest are picked
+# first; the rest get retrained on their next on-demand request (or next run).
+MAX_REFRESH_PER_RUN = 500
+
 
 @app.task(name="tasks.ml_tasks.refresh_zip_forecasts", bind=True, max_retries=2)
 def refresh_zip_forecasts(self):
-    """Re-train the Prophet forecast for every ZIP currently in the cache."""
+    """Re-train the Prophet forecast for the stalest cached ZIPs (capped per run)."""
     try:
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
@@ -33,6 +37,8 @@ def refresh_zip_forecasts(self):
         with Session(engine) as session:
             zip_codes = session.execute(
                 select(ZipForecastResult.zip_code)
+                .order_by(ZipForecastResult.trained_at.asc())
+                .limit(MAX_REFRESH_PER_RUN)
             ).scalars().all()
 
             for zip_code in zip_codes:

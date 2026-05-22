@@ -1,7 +1,6 @@
 import math
 from fastapi import APIRouter, Request, Query, Depends, HTTPException
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from app.limiter import limiter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +10,6 @@ from app.models.zip_centroid import ZipCentroid
 from app.services.regions import search_regions
 
 router = APIRouter(tags=["regions"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/regions/search")
