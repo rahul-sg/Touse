@@ -10,6 +10,10 @@ interface Props {
   minBeds: number
   onMinBedsChange: (v: number) => void
   zipForecastPanel?: ReactNode
+  /** Clicking a card asks the map to fly to that listing. */
+  onListingClick?: (listing: Listing) => void
+  /** id of the listing currently focused on the map, for card highlighting. */
+  selectedId?: string | null
 }
 
 function fmt(n: number) {
@@ -24,6 +28,8 @@ export default function ListingSidebar({
   minBeds,
   onMinBedsChange,
   zipForecastPanel,
+  onListingClick,
+  selectedId,
 }: Props) {
   return (
     <aside className={styles.sidebar}>
@@ -86,7 +92,11 @@ export default function ListingSidebar({
         )}
 
         {!isLoading && listings.map((l) => (
-          <div key={l.id} className={styles.card}>
+          <div
+            key={l.id}
+            className={`${styles.card} ${selectedId === l.id ? styles.cardSelected : ''}`}
+            onClick={() => onListingClick?.(l)}
+          >
             {l.photo_url
               ? <img src={l.photo_url} alt={l.address} className={styles.cardPhoto} loading="lazy" />
               : <div className={styles.cardPhotoPlaceholder}>No photo</div>
@@ -103,6 +113,7 @@ export default function ListingSidebar({
                   href={l.listing_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   View listing ↗
                 </a>

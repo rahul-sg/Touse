@@ -13,6 +13,7 @@ interface AuthContextValue {
   login: (user: AuthUser) => void
   logout: () => void
   updateTargetZip: (zip: string | null) => void
+  updateUser: (partial: Partial<AuthUser>) => void
   isLoggedIn: boolean
 }
 
@@ -51,8 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const updateUser = useCallback((partial: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return prev
+      const updated = { ...prev, ...partial }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateTargetZip, isLoggedIn: user !== null }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, updateTargetZip, updateUser, isLoggedIn: user !== null }}
+    >
       {children}
     </AuthContext.Provider>
   )

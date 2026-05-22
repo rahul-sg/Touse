@@ -13,7 +13,8 @@ export default function Navbar() {
 
   return (
     <nav className={styles.nav}>
-      <NavLink to={isLoggedIn ? '/dashboard' : '/'} className={styles.brand}>
+      {/* Logo always returns to the landing page. */}
+      <NavLink to="/" className={styles.brand}>
         Touse
       </NavLink>
       <div className={styles.links}>
@@ -27,17 +28,16 @@ export default function Navbar() {
             Map
           </NavLink>
         )}
-        {!isLoggedIn && (
-          <NavLink to="/calculator" className={({ isActive }) => (isActive ? styles.active : '')}>
-            Quick calculator
-          </NavLink>
-        )}
         <NavLink to="/about" className={({ isActive }) => (isActive ? styles.active : '')}>
           About
         </NavLink>
         {isLoggedIn ? (
           <>
-            {user?.first_name && <span className={styles.userName}>Hi, {user.first_name}</span>}
+            {user?.first_name && (
+              <NavLink to="/profile" className={styles.userName}>
+                Hi, {user.first_name}
+              </NavLink>
+            )}
             <button className={styles.signOutBtn} onClick={handleLogout}>
               Sign out
             </button>

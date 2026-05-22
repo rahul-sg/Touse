@@ -178,7 +178,8 @@ async def get_listings(
             for c in cached
         ]
 
-    # Fetch fresh from API
+    # Fetch fresh from API. RapidAPI returns everything in the polygon regardless
+    # of price/beds, so apply the same filter the cache query uses before returning.
     raw = await _fetch_from_rapidapi(lat, lng, radius_miles, max_price, min_beds)
     await _upsert_cache(db, raw)
     return [
@@ -194,4 +195,5 @@ async def get_listings(
             "photo_url": r.get("photo_url"),
         }
         for r in raw
+        if r["price"] <= max_price and (r["beds"] is None or r["beds"] >= min_beds)
     ]

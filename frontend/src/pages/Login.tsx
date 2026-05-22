@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import styles from './Login.module.css'
 
 interface LoginForm {
-  email: string
+  identifier: string
   password: string
 }
 
@@ -21,14 +21,14 @@ export default function Login() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>({
-    defaultValues: { email: '', password: '' },
+    defaultValues: { identifier: '', password: '' },
   })
 
   async function onSubmit(data: LoginForm) {
     setServerError('')
     setIsLoading(true)
     try {
-      const result = await loginUser(data.email, data.password)
+      const result = await loginUser(data.identifier, data.password)
       login({
         user_id: result.user_id,
         username: result.username,
@@ -57,17 +57,15 @@ export default function Login() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className={styles.field}>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="identifier">Email or username</label>
             <input
-              id="email"
-              type="email"
-              placeholder="jane@example.com"
-              {...register('email', {
-                required: 'Required',
-                pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address' },
-              })}
+              id="identifier"
+              type="text"
+              placeholder="jane@example.com or janesmith"
+              autoCapitalize="none"
+              {...register('identifier', { required: 'Required' })}
             />
-            {errors.email && <p className={styles.error}>{errors.email.message}</p>}
+            {errors.identifier && <p className={styles.error}>{errors.identifier.message}</p>}
           </div>
 
           <div className={styles.field}>

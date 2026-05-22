@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import AffordabilityCalculator from '../components/AffordabilityCalculator'
 import styles from './Landing.module.css'
 
 const HOW_IT_WORKS = [
@@ -112,6 +113,19 @@ export default function Landing() {
               Sign in
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* ── Try the calculator ── */}
+      <section className={styles.calcSection}>
+        <div className={styles.sectionInner}>
+          <p className={styles.sectionEyebrow}>Try it now</p>
+          <h2 className={styles.sectionHeadline}>See what you can afford.</h2>
+          <p className={styles.calcIntro}>
+            No account needed — enter your numbers for an instant estimate. Sign up to save
+            scenarios, browse listings on the map, and track where the market is heading.
+          </p>
+          <AffordabilityCalculator />
         </div>
       </section>
 

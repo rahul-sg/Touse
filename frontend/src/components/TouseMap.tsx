@@ -21,6 +21,8 @@ interface Props {
   onViewportChange?: (lat: number, lng: number, zoom: number) => void
   maxPrice?: number
   centerOn?: { lat: number; lng: number } | null
+  /** When set, the map flies to this listing and opens its popup (sidebar click). */
+  focusListing?: Listing | null
 }
 
 type GeoFeature = GeoJSON.Feature<GeoJSON.Point, Listing & { cluster: false }>
@@ -64,7 +66,7 @@ function toFeatures(listings: Listing[]): GeoFeature[] {
   })
 }
 
-export default function TouseMap({ listings, onViewportChange, maxPrice, centerOn }: Props) {
+export default function TouseMap({ listings, onViewportChange, maxPrice, centerOn, focusListing }: Props) {
   const mapRef = useRef<MapRef>(null)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [viewState, setViewState] = useState<ViewState>({
@@ -72,6 +74,7 @@ export default function TouseMap({ listings, onViewportChange, maxPrice, centerO
     latitude: 39.8283,
     zoom: 4,
   })
+  const [selected, setSelected] = useState<Listing | null>(null)
 
   // Fly to centerOn — but only after the map has fully loaded.
   // If centerOn arrives before the map is ready, we re-run this effect
@@ -85,7 +88,16 @@ export default function TouseMap({ listings, onViewportChange, maxPrice, centerO
     })
   }, [centerOn?.lat, centerOn?.lng, mapLoaded])
 
-  const [selected, setSelected] = useState<Listing | null>(null)
+  // Fly to a listing the user clicked in the sidebar, and open its popup.
+  useEffect(() => {
+    if (!focusListing || !mapLoaded) return
+    mapRef.current?.flyTo({
+      center: [focusListing.lng, focusListing.lat],
+      zoom: 14.5,
+      duration: 800,
+    })
+    setSelected(focusListing)
+  }, [focusListing, mapLoaded])
 
   // Memoize supercluster so it isn't recreated on every render
   const supercluster = useMemo(() => {

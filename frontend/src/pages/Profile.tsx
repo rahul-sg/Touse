@@ -1,0 +1,169 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { useAuth } from '../context/AuthContext'
+import { getMe, updateAccount, changePassword } from '../utils/api'
+import styles from './Profile.module.css'
+
+interface AccountForm {
+  first_name: string
+  last_name: string
+  email: string
+}
+
+interface PasswordForm {
+  current_password: string
+  new_password: string
+  confirm_password: string
+}
+
+type Msg = { ok: boolean; text: string } | null
+
+function extractError(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+  return typeof detail === 'string' ? detail : fallback
+}
+
+export default function Profile() {
+  const { user, isLoggedIn, updateUser } = useAuth()
+  const navigate = useNavigate()
+
+  const [username, setUsername] = useState('')
+  const [accountMsg, setAccountMsg] = useState<Msg>(null)
+  const [passwordMsg, setPasswordMsg] = useState<Msg>(null)
+
+  const account = useForm<AccountForm>({
+    defaultValues: { first_name: '', last_name: '', email: '' },
+  })
+  const password = useForm<PasswordForm>({
+    defaultValues: { current_password: '', new_password: '', confirm_password: '' },
+  })
+
+  useEffect(() => {
+    if (!isLoggedIn || !user) {
+      navigate('/login')
+      return
+    }
+    getMe(user.user_id)
+      .then(me => {
+        account.reset({ first_name: me.first_name, last_name: me.last_name, email: me.email })
+        setUsername(me.username)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, user, navigate])
+
+  async function onSaveAccount(data: AccountForm) {
+    if (!user) return
+    setAccountMsg(null)
+    try {
+      const updated = await updateAccount(user.user_id, data)
+      updateUser({ first_name: updated.first_name })
+      setAccountMsg({ ok: true, text: 'Account details saved.' })
+    } catch (err) {
+      setAccountMsg({ ok: false, text: extractError(err, 'Could not update your account.') })
+    }
+  }
+
+  async function onChangePassword(data: PasswordForm) {
+    if (!user) return
+    setPasswordMsg(null)
+    if (data.new_password !== data.confirm_password) {
+      setPasswordMsg({ ok: false, text: 'New passwords do not match.' })
+      return
+    }
+    try {
+      await changePassword(user.user_id, data.current_password, data.new_password)
+      password.reset({ current_password: '', new_password: '', confirm_password: '' })
+      setPasswordMsg({ ok: true, text: 'Password changed.' })
+    } catch (err) {
+      setPasswordMsg({ ok: false, text: extractError(err, 'Could not change your password.') })
+    }
+  }
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <h1 className={styles.title}>Your profile</h1>
+        <p className={styles.subtitle}>Manage your account details and password.</p>
+
+        {/* ── Account details ── */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Account details</h2>
+          <form onSubmit={account.handleSubmit(onSaveAccount)} noValidate>
+            <div className={styles.row}>
+              <div className={styles.field}>
+                <label>First name</label>
+                <input {...account.register('first_name', { required: true })} />
+              </div>
+              <div className={styles.field}>
+                <label>Last name</label>
+                <input {...account.register('last_name', { required: true })} />
+              </div>
+            </div>
+            <div className={styles.field}>
+              <label>Email</label>
+              <input type="email" {...account.register('email', { required: true })} />
+            </div>
+            <div className={styles.field}>
+              <label>Username</label>
+              <input value={username} disabled className={styles.disabledInput} />
+              <p className={styles.hint}>Your username can't be changed.</p>
+            </div>
+            {accountMsg && (
+              <p className={accountMsg.ok ? styles.success : styles.error}>{accountMsg.text}</p>
+            )}
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={account.formState.isSubmitting}
+            >
+              {account.formState.isSubmitting ? 'Saving…' : 'Save changes'}
+            </button>
+          </form>
+        </div>
+
+        {/* ── Change password ── */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Change password</h2>
+          <form onSubmit={password.handleSubmit(onChangePassword)} noValidate>
+            <div className={styles.field}>
+              <label>Current password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                {...password.register('current_password', { required: true })}
+              />
+            </div>
+            <div className={styles.field}>
+              <label>New password</label>
+              <input
+                type="password"
+                placeholder="At least 8 characters"
+                {...password.register('new_password', { required: true, minLength: 8 })}
+              />
+            </div>
+            <div className={styles.field}>
+              <label>Confirm new password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                {...password.register('confirm_password', { required: true })}
+              />
+            </div>
+            {passwordMsg && (
+              <p className={passwordMsg.ok ? styles.success : styles.error}>{passwordMsg.text}</p>
+            )}
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={password.formState.isSubmitting}
+            >
+              {password.formState.isSubmitting ? 'Saving…' : 'Change password'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import TouseMap from '../components/TouseMap'
 import ListingSidebar from '../components/ListingSidebar'
 import ZipForecastPanel from '../components/ZipForecastPanel'
 import { useListings } from '../hooks/useListings'
+import { usePrimaryScenario } from '../hooks/usePrimaryScenario'
 import { lookupZip, getNearestZip } from '../utils/api'
+import type { Listing } from '../types'
 import styles from './MapView.module.css'
 
 interface LocationState {
@@ -32,13 +33,14 @@ function fmt(n: number) {
 
 export default function MapView() {
   const location = useLocation()
-  const { user } = useAuth()
+  const { primaryScenario } = usePrimaryScenario()
   const state = location.state as LocationState | null
 
   const fromOnboarding = state?.fromOnboarding ?? false
   const scenarioName = state?.scenarioName ?? null
   const [maxPrice, setMaxPrice] = useState(state?.maxPrice ?? DEFAULT_MAX_PRICE)
   const [minBeds, setMinBeds] = useState(1)
+  const [focusedListing, setFocusedListing] = useState<Listing | null>(null)
 
   const [viewport, setViewport] = useState(DEFAULT_CENTER)
   const [activeZip, setActiveZip] = useState<string | null>(null)
@@ -51,8 +53,9 @@ export default function MapView() {
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Prefer scenario ZIP (when navigating from ScenarioDetail) → then user's profile target_zip
-  const initialZip = state?.targetZip ?? user?.target_zip ?? null
+  // Prefer an explicit ZIP from navigation state → else the user's primary scenario's ZIP.
+  // With neither, initialZip stays null and the map shows the whole US.
+  const initialZip = state?.targetZip ?? primaryScenario?.zip_code ?? null
 
   // Resolve initialZip → lat/lng on mount so the map centers on the right area
   useEffect(() => {
@@ -136,6 +139,8 @@ export default function MapView() {
           minBeds={minBeds}
           onMinBedsChange={setMinBeds}
           zipForecastPanel={forecastPanel}
+          onListingClick={setFocusedListing}
+          selectedId={focusedListing?.id ?? null}
         />
         <div className={styles.mapWrap}>
           {/* ZIP overlay badge — shows which area is being forecasted */}
@@ -157,6 +162,7 @@ export default function MapView() {
             onViewportChange={handleViewportChange}
             maxPrice={maxPrice}
             centerOn={mapCenter}
+            focusListing={focusedListing}
           />
         </div>
       </div>

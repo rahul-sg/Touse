@@ -67,6 +67,11 @@
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.userName:hover {
+  color: var(--color-forest);
 }
 
 .signOutBtn {

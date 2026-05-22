@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 
@@ -43,7 +43,7 @@ class ProfileRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
+    identifier: str  # email OR username
     password: str
 
 
@@ -107,7 +107,11 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == body.email))
+    # Accept either an email address or a username as the identifier.
+    ident = body.identifier.strip()
+    result = await db.execute(
+        select(User).where(or_(User.email == ident, User.username == ident))
+    )
     user = result.scalar_one_or_none()
     if not user or not _verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -231,3 +235,71 @@ async def update_target_zip(
     user.target_zip = body.get("target_zip")
     await db.commit()
     return {"target_zip": user.target_zip}
+
+
+# ── Account self-service (profile page) ───────────────────────
+
+class AccountUpdateRequest(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    email: EmailStr | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.patch("/account/{user_id}")
+async def update_account(
+    user_id: int,
+    body: AccountUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """Update the user's name and/or email address."""
+    require_self(user_id, current_user_id)
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if body.email and body.email != user.email:
+        existing = await db.execute(select(User).where(User.email == body.email))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        user.email = body.email
+    if body.first_name is not None:
+        user.first_name = body.first_name.strip()
+    if body.last_name is not None:
+        user.last_name = body.last_name.strip()
+
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "user_id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "username": user.username,
+    }
+
+
+@router.post("/change-password/{user_id}")
+async def change_password(
+    user_id: int,
+    body: PasswordChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """Change the user's password after verifying the current one."""
+    require_self(user_id, current_user_id)
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not _verify_password(body.current_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    user.hashed_password = _hash_password(body.new_password)
+    await db.commit()
+    return {"status": "ok"}

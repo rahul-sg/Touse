@@ -94,8 +94,9 @@ export async function register(payload: RegisterPayload): Promise<AuthResponse> 
   return data
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const { data } = await api.post<AuthResponse>('/api/v1/auth/login', { email, password })
+/** `identifier` may be an email address or a username. */
+export async function loginUser(identifier: string, password: string): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>('/api/v1/auth/login', { identifier, password })
   return data
 }
 
@@ -157,6 +158,33 @@ export async function getReadiness(payload: ReadinessRequest): Promise<Readiness
 
 export async function setTargetZip(userId: number, targetZip: string | null): Promise<void> {
   await api.patch(`/api/v1/auth/target-zip/${userId}`, { target_zip: targetZip })
+}
+
+export interface AccountInfo {
+  user_id: number
+  first_name: string
+  last_name: string
+  email: string
+  username: string
+}
+
+export async function updateAccount(
+  userId: number,
+  payload: { first_name?: string; last_name?: string; email?: string },
+): Promise<AccountInfo> {
+  const { data } = await api.patch<AccountInfo>(`/api/v1/auth/account/${userId}`, payload)
+  return data
+}
+
+export async function changePassword(
+  userId: number,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await api.post(`/api/v1/auth/change-password/${userId}`, {
+    current_password: currentPassword,
+    new_password: newPassword,
+  })
 }
 
 export async function getNearestZip(lat: number, lng: number): Promise<{
