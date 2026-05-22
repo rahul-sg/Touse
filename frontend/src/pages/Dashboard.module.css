@@ -181,7 +181,7 @@
   box-shadow: 0 4px 16px rgba(28,58,47,0.08);
   text-decoration: none;
 }
-.actionIcon { font-size: 1.5rem; }
+.actionIcon { color: var(--color-forest); }
 .actionLabel { font-size: 0.875rem; font-weight: 600; color: var(--color-text); }
 
 /* ── Scenarios section ── */

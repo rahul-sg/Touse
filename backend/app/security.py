@@ -14,6 +14,7 @@ from jose import jwt, JWTError
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
+EMAIL_TOKEN_EXPIRE_DAYS = 3
 
 # auto_error=True → a missing/blank Authorization header yields a 403 automatically.
 _bearer = HTTPBearer(auto_error=True)
@@ -53,3 +54,24 @@ def require_self(path_user_id: int, current_user_id: int) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to access this account.",
         )
+
+
+def create_email_token(user_id: int) -> str:
+    """Mint a short-lived signed token used in email-verification links."""
+    expire = datetime.now(timezone.utc) + timedelta(days=EMAIL_TOKEN_EXPIRE_DAYS)
+    return jwt.encode(
+        {"sub": str(user_id), "purpose": "email_verify", "exp": expire},
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_email_token(token: str) -> int | None:
+    """Return the user id from a valid email-verification token, else None."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "email_verify":
+            return None
+        return int(payload["sub"])
+    except (JWTError, ValueError, KeyError):
+        return None

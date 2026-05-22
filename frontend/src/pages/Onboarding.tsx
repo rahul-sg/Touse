@@ -59,6 +59,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
         first_name: result.first_name,
         access_token: result.access_token,
         target_zip: result.target_zip ?? null,
+        email_verified: result.email_verified,
       })
       onSuccess(result.user_id)
     } catch (err: unknown) {

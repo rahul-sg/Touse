@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import type { Scenario } from '../types'
 import styles from './ScenarioCard.module.css'
 
@@ -49,7 +50,7 @@ export default function ScenarioCard({
           title={isPrimary ? 'This is your primary scenario' : 'Set as primary scenario'}
           aria-label={isPrimary ? 'Primary scenario' : 'Set as primary scenario'}
         >
-          {isPrimary ? '★' : '☆'}
+          <Star size={17} strokeWidth={1.8} fill={isPrimary ? 'currentColor' : 'none'} />
         </button>
         <span className={styles.name}>{scenario.name}</span>
         <div className={styles.badges}>

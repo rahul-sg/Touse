@@ -67,6 +67,7 @@ export interface AuthResponse {
   username: string
   first_name: string
   target_zip: string | null
+  email_verified: boolean
 }
 
 export interface ReadinessRequest {
@@ -185,6 +186,22 @@ export async function changePassword(
     current_password: currentPassword,
     new_password: newPassword,
   })
+}
+
+export async function submitContact(payload: {
+  name: string
+  email: string
+  message: string
+}): Promise<void> {
+  await api.post('/api/v1/contact', payload)
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await api.post('/api/v1/auth/verify-email', { token })
+}
+
+export async function resendVerification(userId: number): Promise<void> {
+  await api.post(`/api/v1/auth/resend-verification/${userId}`)
 }
 
 export async function getNearestZip(lat: number, lng: number): Promise<{

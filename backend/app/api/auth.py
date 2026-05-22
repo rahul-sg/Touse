@@ -7,7 +7,14 @@ from passlib.context import CryptContext
 from app.db import get_db
 from app.models.user import User
 from app.models.scenario import Scenario
-from app.security import create_access_token, get_current_user_id, require_self
+from app.security import (
+    create_access_token,
+    create_email_token,
+    decode_email_token,
+    get_current_user_id,
+    require_self,
+)
+from app.services.email import send_verification_email
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -54,6 +61,11 @@ class TokenResponse(BaseModel):
     username: str
     first_name: str
     target_zip: str | None = None
+    email_verified: bool = False
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -96,12 +108,16 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
+    # Best-effort verification email — send_verification_email never raises.
+    await send_verification_email(user.email, user.first_name, create_email_token(user.id))
+
     return TokenResponse(
         access_token=create_access_token(user.id),
         user_id=user.id,
         username=user.username,
         first_name=user.first_name,
         target_zip=user.target_zip,
+        email_verified=user.email_verified,
     )
 
 
@@ -122,7 +138,40 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         username=user.username,
         first_name=user.first_name,
         target_zip=user.target_zip,
+        email_verified=user.email_verified,
     )
+
+
+@router.post("/verify-email")
+async def verify_email(body: VerifyEmailRequest, db: AsyncSession = Depends(get_db)):
+    """Confirm a user's email address from a verification-link token."""
+    user_id = decode_email_token(body.token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.email_verified:
+        user.email_verified = True
+        await db.commit()
+    return {"email_verified": True}
+
+
+@router.post("/resend-verification/{user_id}")
+async def resend_verification(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """Re-send the verification email to the authenticated user."""
+    require_self(user_id, current_user_id)
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email_verified:
+        return {"status": "already_verified"}
+    sent = await send_verification_email(user.email, user.first_name, create_email_token(user.id))
+    return {"status": "sent" if sent else "skipped"}
 
 
 @router.post("/profile/{user_id}")
@@ -203,6 +252,7 @@ async def get_me(
         "last_name": user.last_name,
         "email": user.email,
         "username": user.username,
+        "email_verified": user.email_verified,
         "annual_income": user.annual_income,
         "savings": user.savings,
         "down_payment": user.down_payment,

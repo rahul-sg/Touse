@@ -145,6 +145,58 @@
   color: var(--color-text-muted);
 }
 
+.rateToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.rateToggleLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+}
+
+.rateBtns {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rateBtn {
+  padding: 0.4rem 0.85rem;
+  background: var(--color-surface);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rateBtn:last-child { border-right: none; }
+.rateBtn:hover { color: var(--color-forest); }
+
+.rateBtnActive,
+.rateBtnActive:hover {
+  background: var(--color-forest);
+  color: #fff;
+}
+
+.scenarioNote {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  font-weight: 500;
+  margin: 0.85rem 0 0;
+}
+
 .loading {
   display: flex;
   justify-content: center;

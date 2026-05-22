@@ -21,11 +21,31 @@ from app.models.zip_forecast_result import ZipForecastResult
 logging.getLogger("prophet").setLevel(logging.WARNING)
 logging.getLogger("cmdstanpy").setLevel(logging.WARNING)
 
-MODEL_VERSION = "prophet_zip_v1"
+MODEL_VERSION = "prophet_zip_v2"
 MIN_MONTHS = 24          # Prophet needs a couple of years to learn seasonality
 FORECAST_MONTHS = 12
 HISTORY_TAIL_MONTHS = 6  # actuals shown before the projection for chart context
 MAX_AGE_DAYS = 30        # re-train a cached forecast once it is older than this
+
+# Long-run anchoring — blend the Prophet trend toward the ZIP's multi-year CAGR
+# so a recent boom doesn't extrapolate at full slope for an entire year.
+CAGR_WINDOW_YEARS = 10
+CAGR_MIN, CAGR_MAX = -0.10, 0.12     # clamp the annual CAGR to a sane band
+BLEND_NEAR, BLEND_FAR = 0.85, 0.40   # Prophet weight at month 1 vs month 12
+
+
+def _long_run_monthly_cagr(df: pd.DataFrame, last_actual, current_value: float) -> float:
+    """Compound monthly growth over the last CAGR_WINDOW_YEARS, clamped to a sane band."""
+    window = df[df["ds"] >= last_actual - pd.DateOffset(years=CAGR_WINDOW_YEARS)]
+    if len(window) < 24:
+        return 0.0
+    base_val = float(window.iloc[0]["y"])
+    span_years = (last_actual - window.iloc[0]["ds"]).days / 365.25
+    if base_val <= 0 or span_years <= 0:
+        return 0.0
+    annual = (current_value / base_val) ** (1 / span_years) - 1
+    annual = max(CAGR_MIN, min(CAGR_MAX, annual))
+    return (1 + annual) ** (1 / 12) - 1
 
 
 def _fit_and_forecast(
@@ -35,7 +55,12 @@ def _fit_and_forecast(
 
     `points` is a chart-ready list of {month, price, lower, upper}: a short tail
     of actuals (zero-width band) followed by 12 projected months (widening band).
-    This is CPU-bound and synchronous — call it via asyncio.to_thread.
+
+    The raw Prophet trend extrapolates the most recent slope linearly, which
+    over-projects after a boom. We blend each projected month toward the ZIP's
+    long-run CAGR — trusting Prophet near-term, the historical norm further out.
+
+    CPU-bound and synchronous — call it via asyncio.to_thread.
     """
     df = pd.DataFrame(history, columns=["ds", "y"])
     df["ds"] = pd.to_datetime(df["ds"])
@@ -46,7 +71,7 @@ def _fit_and_forecast(
         weekly_seasonality=False,
         daily_seasonality=False,
         interval_width=0.80,           # 80% confidence band
-        changepoint_prior_scale=0.05,  # conservative — home values move slowly
+        changepoint_prior_scale=0.03,  # low — home values move slowly
     )
     model.fit(df)
 
@@ -55,6 +80,7 @@ def _fit_and_forecast(
 
     last_actual = df["ds"].max()
     current_value = float(df.iloc[-1]["y"])
+    monthly_cagr = _long_run_monthly_cagr(df, last_actual, current_value)
 
     points: list[dict] = []
     # Tail of actuals — band collapses to the real value.
@@ -63,20 +89,30 @@ def _fit_and_forecast(
         v = round(float(row["y"]))
         points.append({"month": row["ds"].strftime("%Y-%m"), "price": v, "lower": v, "upper": v})
 
-    # Projected months — widening confidence band.
-    future_only = forecast[forecast["ds"] > last_actual]
-    for _, row in future_only.iterrows():
+    # Projected months — Prophet blended toward the long-run CAGR path.
+    future_only = forecast[forecast["ds"] > last_actual].reset_index(drop=True)
+    last_blended = current_value
+    for i, row in future_only.iterrows():
+        t = i + 1  # months ahead (1..FORECAST_MONTHS)
+        prophet_yhat = float(row["yhat"])
+        cagr_value = current_value * (1 + monthly_cagr) ** t
+        if FORECAST_MONTHS > 1:
+            weight = BLEND_NEAR - (BLEND_NEAR - BLEND_FAR) * (t - 1) / (FORECAST_MONTHS - 1)
+        else:
+            weight = BLEND_NEAR
+        blended = weight * prophet_yhat + (1 - weight) * cagr_value
+        delta = blended - prophet_yhat  # shift the band to recenter on the blend
+        last_blended = blended
         points.append({
             "month": row["ds"].strftime("%Y-%m"),
-            "price": round(float(row["yhat"])),
-            "lower": round(float(row["yhat_lower"])),
-            "upper": round(float(row["yhat_upper"])),
+            "price": round(blended),
+            "lower": round(float(row["yhat_lower"]) + delta),
+            "upper": round(float(row["yhat_upper"]) + delta),
         })
 
     pct_12m: float | None = None
-    if current_value and not future_only.empty:
-        final = float(future_only.iloc[-1]["yhat"])
-        pct_12m = round((final - current_value) / current_value * 100, 2)
+    if current_value:
+        pct_12m = round((last_blended - current_value) / current_value * 100, 2)
 
     return points, current_value, pct_12m
 
@@ -101,7 +137,12 @@ async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
     cached = await db.scalar(
         select(ZipForecastResult).where(ZipForecastResult.zip_code == zip_code)
     )
-    if cached and (datetime.utcnow() - cached.trained_at).days < MAX_AGE_DAYS:
+    # Reuse the cache only if it's fresh AND from the current model version.
+    if (
+        cached
+        and cached.model_version == MODEL_VERSION
+        and (datetime.utcnow() - cached.trained_at).days < MAX_AGE_DAYS
+    ):
         return _serialize(cached)
 
     rows = (

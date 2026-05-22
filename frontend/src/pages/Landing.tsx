@@ -54,12 +54,11 @@ const FEATURES = [
 ]
 
 const DATA_SOURCES = [
-  { name: 'Zillow Research', desc: 'Monthly median home prices by metro' },
-  { name: 'FRED (Federal Reserve)', desc: 'Mortgage rates, CPI, housing starts' },
-  { name: 'BLS', desc: 'Employment data by metro area' },
-  { name: 'Census ACS', desc: 'Population and income by ZIP code' },
+  { name: 'Zillow Research', desc: 'Monthly median home values by ZIP code' },
+  { name: 'Freddie Mac PMMS', desc: 'Weekly 30- and 15-year mortgage rates' },
+  { name: 'FRED (Federal Reserve)', desc: 'CPI, unemployment, housing starts' },
   { name: 'BEA', desc: 'State-level GDP growth' },
-  { name: 'HUD', desc: 'Fair market rents and policy data' },
+  { name: 'US Census Bureau', desc: 'ZIP boundaries and address geocoding' },
 ]
 
 const SCENARIOS = [
@@ -216,14 +215,15 @@ export default function Landing() {
             <p className={styles.sectionEyebrow}>Market intelligence</p>
             <h2 className={styles.forecastHeadline}>A forecast, not just a calculator.</h2>
             <p className={styles.forecastDesc}>
-              Most tools tell you what you can borrow today. Touse goes further. Our machine learning
-              model is trained on years of Zillow price history, FRED economic indicators, Zillow
-              supply signals (active listings, days on market, price cuts), and local market data to
-              project where prices in your target area are heading over the next 12 months.
+              Most tools tell you what you can borrow today. Touse goes further. For every ZIP code, a
+              time-series model trained on years of Zillow price history projects where home values
+              are heading over the next 12 months — shown as an honest confidence range, anchored to
+              the area's long-run growth so a recent boom doesn't skew the picture.
             </p>
             <p className={styles.forecastDesc}>
-              That means you can see whether now is a smart time to buy, or whether waiting six months
-              might save you tens of thousands. Your budget, your timeline, your call.
+              Rates are the biggest swing factor, so you can overlay rate scenarios to see how a
+              shift up or down would change the outlook — and decide whether now is your moment, or
+              whether waiting makes more sense. Your budget, your timeline, your call.
             </p>
             <Link to="/onboarding" className={styles.forecastCta}>
               See your forecast →

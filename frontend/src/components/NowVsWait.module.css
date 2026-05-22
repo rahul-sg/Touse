@@ -27,13 +27,15 @@
 /* ── Input row ── */
 .inputRow {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
 }
 
 .inputLabel {
+  display: block;
+  margin-bottom: 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -103,6 +105,24 @@
 .runBtn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.resetBtn {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.resetBtn:hover {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
 }
 
 .errorMsg {

@@ -36,10 +36,11 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1.15rem;
+  display: inline-flex;
+  align-items: center;
   line-height: 1;
   padding: 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   flex-shrink: 0;
   transition: color 0.15s, transform 0.1s;
 }

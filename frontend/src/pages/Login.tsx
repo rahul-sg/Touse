@@ -35,6 +35,7 @@ export default function Login() {
         first_name: result.first_name,
         access_token: result.access_token,
         target_zip: result.target_zip ?? null,
+        email_verified: result.email_verified,
       })
       navigate('/dashboard')
     } catch (err: unknown) {

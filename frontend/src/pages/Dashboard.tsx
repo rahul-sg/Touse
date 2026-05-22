@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Map as MapIcon, TrendingUp, Plus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMe, getReadiness, setPrimaryScenario } from '../utils/api'
 import { useScenarios, useDeleteScenario } from '../hooks/useScenarios'
@@ -256,7 +257,7 @@ export default function Dashboard() {
                   }}
                   className={styles.actionCard}
                 >
-                  <span className={styles.actionIcon}>🗺</span>
+                  <MapIcon className={styles.actionIcon} size={26} strokeWidth={1.6} />
                   <span className={styles.actionLabel}>Browse the map</span>
                 </Link>
                 {primaryScenario?.zip_code && (
@@ -264,12 +265,12 @@ export default function Dashboard() {
                     to={`/forecast/${primaryScenario.zip_code}`}
                     className={styles.actionCard}
                   >
-                    <span className={styles.actionIcon}>📈</span>
+                    <TrendingUp className={styles.actionIcon} size={26} strokeWidth={1.6} />
                     <span className={styles.actionLabel}>ZIP price forecast</span>
                   </Link>
                 )}
                 <button className={styles.actionCard} onClick={() => setShowForm(true)}>
-                  <span className={styles.actionIcon}>＋</span>
+                  <Plus className={styles.actionIcon} size={26} strokeWidth={1.6} />
                   <span className={styles.actionLabel}>Add scenario</span>
                 </button>
               </div>

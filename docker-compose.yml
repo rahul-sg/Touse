@@ -28,6 +28,9 @@ services:
       - BEA_API_KEY=${BEA_API_KEY}
       - CENSUS_API_KEY=${CENSUS_API_KEY}
       - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - FRONTEND_URL=${FRONTEND_URL}
       - SENTRY_DSN=${SENTRY_DSN}
     depends_on:
       postgres:

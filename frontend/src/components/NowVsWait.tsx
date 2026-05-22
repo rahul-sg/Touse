@@ -22,6 +22,8 @@ interface Props {
   loanType?: string
 }
 
+const DEFAULT_WAIT_MONTHS = 12
+
 function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
@@ -50,13 +52,16 @@ export default function NowVsWait({ profile, loanType }: Props) {
 
   const [monthlySavings, setMonthlySavings] = useState(defaultSavings)
   const [inputVal, setInputVal] = useState(String(defaultSavings))
+  const [waitMonths, setWaitMonths] = useState(DEFAULT_WAIT_MONTHS)
+  const [waitInput, setWaitInput] = useState(String(DEFAULT_WAIT_MONTHS))
   const [result, setResult] = useState<NowVsWaitResult | null>(null)
+  const [resultMonths, setResultMonths] = useState(DEFAULT_WAIT_MONTHS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
 
   const profileIncomplete = !profile.annual_income || !profile.down_payment || !profile.credit_score
 
-  const run = useCallback(async (savings: number) => {
+  const run = useCallback(async (savings: number, months: number) => {
     if (!profile.annual_income || !profile.down_payment || !profile.credit_score) return
     setLoading(true)
     setError(false)
@@ -70,9 +75,10 @@ export default function NowVsWait({ profile, loanType }: Props) {
         zip_code: profile.zip_code ?? '',
         loan_type: loanType ?? 'conventional',
         monthly_savings: savings,
-        wait_months: 12,
+        wait_months: months,
       })
       setResult(data)
+      setResultMonths(months)
     } catch {
       setError(true)
     } finally {
@@ -83,13 +89,26 @@ export default function NowVsWait({ profile, loanType }: Props) {
   function handleSavingsChange(val: string) {
     setInputVal(val)
     const n = Number(val)
-    if (!isNaN(n) && n >= 0) {
-      setMonthlySavings(n)
-    }
+    if (!isNaN(n) && n >= 0) setMonthlySavings(n)
+  }
+
+  function handleWaitChange(val: string) {
+    setWaitInput(val)
+    const n = Number(val)
+    if (!isNaN(n) && n >= 1 && n <= 60) setWaitMonths(n)
   }
 
   function handleRun() {
-    run(monthlySavings)
+    run(monthlySavings, waitMonths)
+  }
+
+  function handleReset() {
+    setResult(null)
+    setError(false)
+    setMonthlySavings(defaultSavings)
+    setInputVal(String(defaultSavings))
+    setWaitMonths(DEFAULT_WAIT_MONTHS)
+    setWaitInput(String(DEFAULT_WAIT_MONTHS))
   }
 
   const rec = result ? REC_CONFIG[result.recommendation] : null
@@ -97,26 +116,45 @@ export default function NowVsWait({ profile, loanType }: Props) {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Buy now vs wait 12 months</h2>
+        <h2 className={styles.title}>Buy now vs wait {waitMonths} months</h2>
         <p className={styles.subtitle}>
           See how your budget changes if you keep saving before buying.
         </p>
       </div>
 
       <div className={styles.inputRow}>
-        <label className={styles.inputLabel}>Monthly savings rate</label>
-        <div className={styles.inputWrap}>
-          <span className={styles.prefix}>$</span>
-          <input
-            type="number"
-            min="0"
-            className={styles.input}
-            value={inputVal}
-            onChange={e => handleSavingsChange(e.target.value)}
-            placeholder="2000"
-          />
-          <span className={styles.suffix}>/mo</span>
+        <div>
+          <label className={styles.inputLabel}>Monthly savings rate</label>
+          <div className={styles.inputWrap}>
+            <span className={styles.prefix}>$</span>
+            <input
+              type="number"
+              min="0"
+              className={styles.input}
+              value={inputVal}
+              onChange={e => handleSavingsChange(e.target.value)}
+              placeholder="2000"
+            />
+            <span className={styles.suffix}>/mo</span>
+          </div>
         </div>
+
+        <div>
+          <label className={styles.inputLabel}>Wait period</label>
+          <div className={styles.inputWrap}>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              className={styles.input}
+              value={waitInput}
+              onChange={e => handleWaitChange(e.target.value)}
+              placeholder="12"
+            />
+            <span className={styles.suffix}>months</span>
+          </div>
+        </div>
+
         <button
           className={styles.runBtn}
           onClick={handleRun}
@@ -125,6 +163,12 @@ export default function NowVsWait({ profile, loanType }: Props) {
         >
           {loading ? 'Calculating…' : 'Compare →'}
         </button>
+
+        {result && (
+          <button className={styles.resetBtn} onClick={handleReset}>
+            Reset
+          </button>
+        )}
       </div>
 
       {profileIncomplete && (
@@ -156,7 +200,7 @@ export default function NowVsWait({ profile, loanType }: Props) {
             <div className={styles.divider}>→</div>
 
             <div className={styles.col}>
-              <p className={styles.colLabel}>After 12 months (rates flat)</p>
+              <p className={styles.colLabel}>After {resultMonths} months (rates flat)</p>
               <p className={`${styles.colPrice} ${result.price_delta_flat >= 0 ? styles.colPriceUp : styles.colPriceDown}`}>
                 {fmt(result.wait.flat.max_price)}
               </p>
@@ -175,7 +219,7 @@ export default function NowVsWait({ profile, loanType }: Props) {
 
           {/* Rate scenarios */}
           <div className={styles.scenarios}>
-            <p className={styles.scenariosLabel}>If rates shift in 12 months</p>
+            <p className={styles.scenariosLabel}>If rates shift in {resultMonths} months</p>
             <div className={styles.scenarioRow}>
               <span className={styles.scenarioName}>Rates drop 0.5%</span>
               <span className={styles.scenarioRate}>{result.wait.rate_down_half.rate_used.toFixed(2)}%</span>

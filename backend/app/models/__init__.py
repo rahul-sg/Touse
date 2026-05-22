@@ -6,6 +6,7 @@ from app.models.policy_flag import PolicyFlag
 from app.models.forecast_result import ForecastResult
 from app.models.listing import ListingCache
 from app.models.zip_forecast_result import ZipForecastResult
+from app.models.contact_message import ContactMessage
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "ForecastResult",
     "ListingCache",
     "ZipForecastResult",
+    "ContactMessage",
 ]

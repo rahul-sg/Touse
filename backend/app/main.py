@@ -6,7 +6,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api import affordability, listings, regions
 from app.api import auth
-from app.api import scenarios, rental, readiness, compare, zip_forecast
+from app.api import scenarios, rental, readiness, compare, zip_forecast, contact
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -42,6 +42,7 @@ app.include_router(compare.router)
 # Metro-level forecasting was retired in favour of the ZIP-native pipeline
 # (zip_forecast.router → /api/v1/zip/projection, trained on zip_price_history).
 app.include_router(zip_forecast.router)
+app.include_router(contact.router, prefix="/api/v1")
 
 
 @app.get("/health")

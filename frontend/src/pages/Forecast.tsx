@@ -3,7 +3,47 @@ import { useParams, Link } from 'react-router-dom'
 import ForecastChart from '../components/ForecastChart'
 import { getZipForecast, getZipProjection, getMarketContext } from '../utils/api'
 import type { ZipProjection, MarketContext } from '../utils/api'
+import type { ForecastPoint } from '../types'
 import styles from './Forecast.module.css'
+
+// ── Rate scenarios ───────────────────────────────────────────────────────────
+// The Prophet model is univariate — it cannot see interest rates. These
+// scenarios apply a transparent, illustrative price elasticity so users can
+// see rate risk; they are NOT a rate-adjusted prediction from the model.
+
+type RateScenario = 'base' | 'up' | 'down'
+
+/** Illustrative price response per 1 percentage point of rate change, by month 12. */
+const RATE_ELASTICITY = 0.04
+const FORECAST_HORIZON = 12
+
+const RATE_OPTIONS: { value: RateScenario; label: string }[] = [
+  { value: 'down', label: 'Rates −1 pt' },
+  { value: 'base', label: 'Today’s rates' },
+  { value: 'up', label: 'Rates +1 pt' },
+]
+
+/**
+ * Apply a rate scenario to the projected (future) points. Rates up → prices
+ * down. The effect ramps linearly across the 12-month horizon. History points
+ * (the leading tail) are left untouched.
+ */
+function applyRateScenario(points: ForecastPoint[], scenario: RateScenario): ForecastPoint[] {
+  if (scenario === 'base' || points.length === 0) return points
+  const sign = scenario === 'up' ? -1 : 1
+  const firstFuture = Math.max(0, points.length - FORECAST_HORIZON)
+  return points.map((p, i) => {
+    if (i < firstFuture) return p
+    const t = i - firstFuture + 1 // 1..12
+    const factor = 1 + sign * RATE_ELASTICITY * (t / FORECAST_HORIZON)
+    return {
+      month: p.month,
+      price: Math.round(p.price * factor),
+      lower: Math.round(p.lower * factor),
+      upper: Math.round(p.upper * factor),
+    }
+  })
+}
 
 function fmt(n: number | null) {
   if (n == null) return '—'
@@ -41,6 +81,7 @@ export default function Forecast() {
   const [trendsLoading, setTrendsLoading] = useState(true)
   const [projLoading, setProjLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [rateScenario, setRateScenario] = useState<RateScenario>('base')
 
   useEffect(() => {
     if (!zip) return
@@ -69,6 +110,13 @@ export default function Forecast() {
 
   const place = trends ? [trends.city, trends.state].filter(Boolean).join(', ') : ''
   const proj12m = projection?.forecast_12m_pct ?? null
+
+  const currentValue = projection?.current_value ?? trends?.current_median_value ?? null
+  const displayForecast = applyRateScenario(projection?.forecast_12m ?? [], rateScenario)
+  const scenarioPct =
+    displayForecast.length && currentValue
+      ? ((displayForecast[displayForecast.length - 1].price - currentValue) / currentValue) * 100
+      : null
 
   return (
     <div className={styles.page}>
@@ -115,9 +163,27 @@ export default function Forecast() {
         <section className={styles.chartSection}>
           <h2 className={styles.sectionTitle}>12-Month Price Forecast</h2>
           <p className={styles.sectionSub}>
-            Prophet time-series model trained on this ZIP's full price history.
-            Shaded area is the 80% confidence interval; the dashed line marks today's value.
+            Prophet time-series model trained on this ZIP's full price history, blended
+            toward the long-run growth rate. Shaded area is the 80% confidence interval;
+            the dashed line marks today's value.
           </p>
+
+          {projection && (
+            <div className={styles.rateToggle}>
+              <span className={styles.rateToggleLabel}>Rate scenario</span>
+              <div className={styles.rateBtns}>
+                {RATE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.rateBtn} ${rateScenario === opt.value ? styles.rateBtnActive : ''}`}
+                    onClick={() => setRateScenario(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {projLoading ? (
             <div className={styles.loading}>
@@ -125,16 +191,23 @@ export default function Forecast() {
               <p style={{ marginTop: '0.75rem' }}>Training the forecast model…</p>
             </div>
           ) : (
-            <ForecastChart
-              forecast={projection?.forecast_12m ?? []}
-              currentPrice={projection?.current_value ?? trends?.current_median_value ?? null}
-            />
+            <ForecastChart forecast={displayForecast} currentPrice={currentValue} />
+          )}
+
+          {projection && scenarioPct != null && (
+            <p className={styles.scenarioNote}>
+              {rateScenario === 'base'
+                ? `The model projects ${fmtTrend(scenarioPct)} over the next 12 months.`
+                : `If 30-year rates ${rateScenario === 'up' ? 'rise' : 'fall'} roughly 1 point, this scenario shows about ${fmtTrend(scenarioPct)}.`}
+            </p>
           )}
 
           {projection && (
-            <p className={styles.sectionSub} style={{ marginTop: '1rem' }}>
+            <p className={styles.sectionSub} style={{ marginTop: '0.75rem' }}>
               Model: Prophet · trained on {projection.data_points} months of history ·
-              last updated {new Date(projection.trained_at).toLocaleDateString()}.
+              last updated {new Date(projection.trained_at).toLocaleDateString()}. Rate
+              scenarios apply an illustrative {Math.round(RATE_ELASTICITY * 100)}% price
+              response per point of rate change — the model itself does not forecast rates.
             </p>
           )}
         </section>

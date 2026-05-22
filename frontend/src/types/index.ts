@@ -94,6 +94,7 @@ export interface UserProfile {
   retirement_value: number | null
   monthly_take_home: number | null
   primary_scenario_public_id: string | null
+  email_verified: boolean
 }
 
 export interface ReadinessComponent {

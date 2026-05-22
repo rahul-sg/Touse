@@ -6,6 +6,7 @@ interface AuthUser {
   first_name: string
   access_token: string
   target_zip: string | null
+  email_verified: boolean
 }
 
 interface AuthContextValue {

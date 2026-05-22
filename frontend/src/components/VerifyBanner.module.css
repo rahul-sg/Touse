@@ -1,0 +1,35 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1.25rem;
+  background: var(--color-brass);
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.text {
+  font-weight: 500;
+}
+
+.resendBtn {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.3rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.resendBtn:hover { background: rgba(255, 255, 255, 0.3); }
+.resendBtn:disabled { opacity: 0.6; cursor: default; }
+
+.sent {
+  font-weight: 700;
+}
