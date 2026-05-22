@@ -5,8 +5,10 @@ import styles from './ScenarioCard.module.css'
 interface Props {
   scenario: Scenario
   isActive: boolean
+  isPrimary: boolean
   onSelect: () => void
   onDelete: () => void
+  onSetPrimary: () => void
 }
 
 const LOAN_LABEL: Record<string, string> = {
@@ -27,13 +29,28 @@ function fmtPrice(n: number, type: 'buy' | 'rent'): string {
   return `$${n}`
 }
 
-export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }: Props) {
+export default function ScenarioCard({
+  scenario,
+  isActive,
+  isPrimary,
+  onSelect,
+  onDelete,
+  onSetPrimary,
+}: Props) {
   return (
     <div
-      className={`${styles.card} ${isActive ? styles.active : ''}`}
+      className={`${styles.card} ${isActive ? styles.active : ''} ${isPrimary ? styles.primary : ''}`}
       onClick={onSelect}
     >
       <div className={styles.header}>
+        <button
+          className={`${styles.starBtn} ${isPrimary ? styles.starBtnActive : ''}`}
+          onClick={e => { e.stopPropagation(); if (!isPrimary) onSetPrimary() }}
+          title={isPrimary ? 'This is your primary scenario' : 'Set as primary scenario'}
+          aria-label={isPrimary ? 'Primary scenario' : 'Set as primary scenario'}
+        >
+          {isPrimary ? '★' : '☆'}
+        </button>
         <span className={styles.name}>{scenario.name}</span>
         <div className={styles.badges}>
           <span className={`${styles.badge} ${scenario.scenario_type === 'rent' ? styles.badgeRent : styles.badgeBuy}`}>

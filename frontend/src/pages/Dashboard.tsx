@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getMe, api, getReadiness } from '../utils/api'
+import { getMe, getReadiness, setPrimaryScenario } from '../utils/api'
 import { useScenarios, useDeleteScenario } from '../hooks/useScenarios'
 import ScenarioCard from '../components/ScenarioCard'
 import ScenarioForm from '../components/ScenarioForm'
 import NowVsWait from '../components/NowVsWait'
-import type { AffordabilityResult, UserProfile, Scenario, ReadinessResult } from '../types'
+import type { UserProfile, Scenario, ReadinessResult } from '../types'
 import styles from './Dashboard.module.css'
 
 // ── Formatters ───────────────────────────────────────────────────────────────
@@ -25,117 +25,123 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [result, setResult] = useState<AffordabilityResult | null>(null)
   const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [calcError, setCalcError] = useState(false)
-
   const [activeTab, setActiveTab] = useState<'overview' | 'scenarios'>('overview')
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
 
   const userId = user?.user_id
-  const { data: scenarios = [], refetch: refetchScenarios } = useScenarios(userId)
+  const { data: scenarios = [], isLoading: scenariosLoading, refetch: refetchScenarios } =
+    useScenarios(userId)
   const deleteMutation = useDeleteScenario(userId ?? 0)
+
+  const loadProfile = useCallback(() => {
+    if (!user) return
+    getMe(user.user_id).then(setProfile).catch(() => {})
+  }, [user])
 
   useEffect(() => {
     if (!isLoggedIn || !user) {
       navigate('/login')
       return
     }
+    loadProfile()
+  }, [isLoggedIn, user, navigate, loadProfile])
 
-    let cancelled = false
-
-    async function load() {
-      setIsLoading(true)
-      try {
-        const me: UserProfile = await getMe(user!.user_id)
-        if (cancelled) return
-        setProfile(me)
-
-        if (
-          me.annual_income != null &&
-          me.savings != null &&
-          me.down_payment != null &&
-          me.credit_score != null &&
-          me.zip_code
-        ) {
-          const monthlyDebt =
-            (me.monthly_debt_car ?? 0) +
-            (me.monthly_debt_student ?? 0) +
-            (me.monthly_debt_credit ?? 0) +
-            (me.monthly_debt_other ?? 0)
-
-          try {
-            const { data: aff } = await api.post<AffordabilityResult>('/api/v1/affordability', {
-              annual_income: me.annual_income,
-              savings: me.savings,
-              monthly_debt: monthlyDebt,
-              credit_score: me.credit_score,
-              down_payment: me.down_payment,
-              zip_code: me.zip_code,
-            })
-            if (!cancelled) {
-              setResult(aff)
-              // Fetch backend readiness score using the actual rate + max price
-              try {
-                const r = await getReadiness({
-                  scenario_type: 'buy',
-                  annual_income: me.annual_income!,
-                  savings: me.savings ?? 0,
-                  down_payment: me.down_payment ?? 0,
-                  credit_score: me.credit_score ?? 620,
-                  monthly_debt_car: me.monthly_debt_car,
-                  monthly_debt_student: me.monthly_debt_student,
-                  monthly_debt_credit: me.monthly_debt_credit,
-                  monthly_debt_other: me.monthly_debt_other,
-                  cached_max_price: aff.max_price,
-                  cached_monthly_payment: aff.monthly_payment,
-                  rate_used: aff.rate_used,
-                  liquid_savings: me.liquid_savings ?? undefined,
-                  target_zip: me.zip_code ?? undefined,
-                })
-                if (!cancelled) setReadiness(r)
-              } catch { /* readiness is optional — don't block dashboard */ }
-            }
-          } catch {
-            if (!cancelled) setCalcError(true)
-          }
-        }
-      } catch {
-        // Profile not yet set up
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
+  // ── Primary scenario: the one the dashboard headlines ──────────────────────
+  // Priority: the user's explicit pick → their only scenario → none.
+  const primaryScenario = useMemo<Scenario | null>(() => {
+    if (scenarios.length === 0) return null
+    if (profile?.primary_scenario_public_id) {
+      const found = scenarios.find(s => s.public_id === profile.primary_scenario_public_id)
+      if (found) return found
     }
+    if (scenarios.length === 1) return scenarios[0]
+    return null
+  }, [scenarios, profile?.primary_scenario_public_id])
 
-    load()
+  // Headline numbers come straight from the primary scenario's saved affordability.
+  const headline = useMemo(() => {
+    if (!primaryScenario || primaryScenario.cached_max_price == null) return null
+    return {
+      maxPrice: primaryScenario.cached_max_price,
+      monthlyPayment: primaryScenario.cached_monthly_payment ?? 0,
+      rateUsed: primaryScenario.cached_rate_used,
+      scenarioType: primaryScenario.scenario_type,
+    }
+  }, [primaryScenario])
+
+  // Compute the readiness score from the primary scenario's inputs.
+  useEffect(() => {
+    let cancelled = false
+    if (!primaryScenario || primaryScenario.annual_income == null) {
+      setReadiness(null)
+      return
+    }
+    getReadiness({
+      scenario_type: primaryScenario.scenario_type,
+      annual_income: primaryScenario.annual_income,
+      savings: primaryScenario.savings ?? 0,
+      down_payment: primaryScenario.down_payment ?? 0,
+      credit_score: primaryScenario.credit_score ?? 620,
+      monthly_debt_car: primaryScenario.monthly_debt_car,
+      monthly_debt_student: primaryScenario.monthly_debt_student,
+      monthly_debt_credit: primaryScenario.monthly_debt_credit,
+      monthly_debt_other: primaryScenario.monthly_debt_other,
+      cached_max_price: primaryScenario.cached_max_price ?? undefined,
+      cached_monthly_payment: primaryScenario.cached_monthly_payment ?? undefined,
+      rate_used: primaryScenario.cached_rate_used ?? undefined,
+      target_zip: primaryScenario.zip_code ?? undefined,
+    })
+      .then(r => { if (!cancelled) setReadiness(r) })
+      .catch(() => { if (!cancelled) setReadiness(null) })
     return () => { cancelled = true }
-  }, [isLoggedIn, user, navigate])
-
-  const hasProfile =
-    profile != null &&
-    profile.annual_income != null &&
-    profile.zip_code != null
+  }, [primaryScenario])
 
   const firstName = user?.first_name ?? 'there'
-
+  const isLoading = scenariosLoading
+  const isRent = headline?.scenarioType === 'rent'
 
   function handleDelete(publicId: string) {
     deleteMutation.mutate(publicId, {
       onSuccess: () => {
         if (activeScenarioId === publicId) setActiveScenarioId(null)
+        loadProfile()  // primary pointer may have been cleared server-side
       },
     })
   }
 
+  async function handleSetPrimary(publicId: string) {
+    try {
+      await setPrimaryScenario(publicId)
+      setProfile(p => (p ? { ...p, primary_scenario_public_id: publicId } : p))
+    } catch {
+      /* ignore — star stays where it was */
+    }
+  }
+
   function handleScenarioCreated(s: Scenario) {
     setActiveScenarioId(s.public_id)
-    setActiveTab('scenarios')  // switch to My Scenarios tab so the new scenario is visible
+    setActiveTab('scenarios')
     refetchScenarios()
+    loadProfile()  // first scenario is auto-set as primary server-side
   }
 
   const previewScenarios = scenarios.slice(0, 3)
+
+  function renderScenarioCard(s: Scenario) {
+    return (
+      <ScenarioCard
+        key={s.public_id}
+        scenario={s}
+        isActive={activeScenarioId === s.public_id}
+        isPrimary={primaryScenario?.public_id === s.public_id}
+        onSelect={() => setActiveScenarioId(s.public_id)}
+        onDelete={() => handleDelete(s.public_id)}
+        onSetPrimary={() => handleSetPrimary(s.public_id)}
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>
@@ -168,48 +174,75 @@ export default function Dashboard() {
               {isLoading && (
                 <div className={styles.loadingState}>
                   <div className={styles.spinner} />
-                  Loading your profile…
+                  Loading your scenarios…
                 </div>
               )}
 
-              {!isLoading && hasProfile && result && !calcError && (
-                <div className={styles.statShelf}>
-                  <div className={styles.statCell}>
-                    <span className={styles.statLabel}>Max purchase price</span>
-                    <span className={styles.statValue}>{fmt(result.max_price)}</span>
-                    <span className={styles.statSub}>Based on current rates</span>
-                  </div>
-                  <div className={styles.statCell}>
-                    <span className={styles.statLabel}>Est. monthly payment</span>
-                    <span className={styles.statValue}>{fmt(result.monthly_payment)}</span>
-                    <span className={styles.statSub}>Principal &amp; interest</span>
-                  </div>
-                  <div className={styles.statCell}>
-                    <span className={styles.statLabel}>Rate used</span>
-                    <span className={styles.statValue}>{fmtRate(result.rate_used)}</span>
-                    <span className={styles.statSub}>Current 30-yr fixed</span>
-                  </div>
-                </div>
-              )}
-
-              {!isLoading && !hasProfile && (
-                <div className={styles.noProfile}>
-                  <h2 className={styles.noProfileTitle}>Complete your financial profile</h2>
-                  <p className={styles.noProfileText}>
-                    Add your income, savings, and debt to see your real home buying budget and browse
-                    listings in your range.
+              {/* Headline — driven by the primary scenario */}
+              {!isLoading && headline && primaryScenario && (
+                <>
+                  <p className={styles.primaryLabel}>
+                    Primary scenario: <strong>{primaryScenario.name}</strong>
+                    {primaryScenario.zip_code ? ` · ${primaryScenario.zip_code}` : ''}
                   </p>
-                  <Link to="/onboarding" className={styles.noProfileBtn}>
-                    Complete my profile →
-                  </Link>
+                  <div className={styles.statShelf}>
+                    <div className={styles.statCell}>
+                      <span className={styles.statLabel}>
+                        {isRent ? 'Max monthly rent' : 'Max purchase price'}
+                      </span>
+                      <span className={styles.statValue}>{fmt(headline.maxPrice)}</span>
+                      <span className={styles.statSub}>From your primary scenario</span>
+                    </div>
+                    <div className={styles.statCell}>
+                      <span className={styles.statLabel}>
+                        {isRent ? 'Recommended rent' : 'Est. monthly payment'}
+                      </span>
+                      <span className={styles.statValue}>{fmt(headline.monthlyPayment)}</span>
+                      <span className={styles.statSub}>
+                        {isRent ? 'Comfortable target' : 'Principal & interest'}
+                      </span>
+                    </div>
+                    {!isRent && headline.rateUsed != null && (
+                      <div className={styles.statCell}>
+                        <span className={styles.statLabel}>Rate used</span>
+                        <span className={styles.statValue}>{fmtRate(headline.rateUsed)}</span>
+                        <span className={styles.statSub}>30-yr fixed</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* No scenarios yet */}
+              {!isLoading && scenarios.length === 0 && (
+                <div className={styles.noProfile}>
+                  <h2 className={styles.noProfileTitle}>See your home buying power</h2>
+                  <p className={styles.noProfileText}>
+                    Create your first scenario — income, savings, loan type — to see what you can
+                    afford and browse listings in your range.
+                  </p>
+                  <button className={styles.noProfileBtn} onClick={() => setShowForm(true)}>
+                    Create my first scenario →
+                  </button>
                 </div>
               )}
 
-              {/* Now vs Wait */}
-              {!isLoading && hasProfile && result && profile && (
+              {/* Scenarios exist but none is primary */}
+              {!isLoading && scenarios.length > 0 && !primaryScenario && (
+                <div className={styles.noProfile}>
+                  <h2 className={styles.noProfileTitle}>Choose a primary scenario</h2>
+                  <p className={styles.noProfileText}>
+                    Tap the ☆ on a scenario below to make it your primary — it drives this
+                    dashboard, the map, and your forecast.
+                  </p>
+                </div>
+              )}
+
+              {/* Now vs Wait — buy scenarios only */}
+              {!isLoading && primaryScenario && primaryScenario.scenario_type === 'buy' && (
                 <NowVsWait
-                  profile={profile}
-                  loanType={result.loan_type}
+                  profile={primaryScenario}
+                  loanType={primaryScenario.loan_type}
                 />
               )}
 
@@ -217,22 +250,25 @@ export default function Dashboard() {
               <div className={styles.quickActions}>
                 <Link
                   to="/map"
-                  state={result ? { maxPrice: result.max_price } : undefined}
+                  state={{
+                    maxPrice: headline?.maxPrice,
+                    targetZip: primaryScenario?.zip_code ?? undefined,
+                  }}
                   className={styles.actionCard}
                 >
                   <span className={styles.actionIcon}>🗺</span>
                   <span className={styles.actionLabel}>Browse the map</span>
                 </Link>
-                {profile?.zip_code && (
-                  <Link to={`/forecast/${profile.zip_code}`} className={styles.actionCard}>
+                {primaryScenario?.zip_code && (
+                  <Link
+                    to={`/forecast/${primaryScenario.zip_code}`}
+                    className={styles.actionCard}
+                  >
                     <span className={styles.actionIcon}>📈</span>
                     <span className={styles.actionLabel}>ZIP price forecast</span>
                   </Link>
                 )}
-                <button
-                  className={styles.actionCard}
-                  onClick={() => setShowForm(true)}
-                >
+                <button className={styles.actionCard} onClick={() => setShowForm(true)}>
                   <span className={styles.actionIcon}>＋</span>
                   <span className={styles.actionLabel}>Add scenario</span>
                 </button>
@@ -247,15 +283,7 @@ export default function Dashboard() {
                   </p>
                 ) : (
                   <div className={styles.scenarioGrid}>
-                    {previewScenarios.map(s => (
-                      <ScenarioCard
-                        key={s.public_id}
-                        scenario={s}
-                        isActive={activeScenarioId === s.public_id}
-                        onSelect={() => setActiveScenarioId(s.public_id)}
-                        onDelete={() => handleDelete(s.public_id)}
-                      />
-                    ))}
+                    {previewScenarios.map(renderScenarioCard)}
                   </div>
                 )}
                 {scenarios.length > 3 && (
@@ -330,15 +358,7 @@ export default function Dashboard() {
               </p>
             ) : (
               <div className={styles.scenarioGrid}>
-                {scenarios.map(s => (
-                  <ScenarioCard
-                    key={s.public_id}
-                    scenario={s}
-                    isActive={activeScenarioId === s.public_id}
-                    onSelect={() => setActiveScenarioId(s.public_id)}
-                    onDelete={() => handleDelete(s.public_id)}
-                  />
-                ))}
+                {scenarios.map(renderScenarioCard)}
               </div>
             )}
           </div>

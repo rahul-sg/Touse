@@ -93,6 +93,7 @@ export interface UserProfile {
   brokerage_value: number | null
   retirement_value: number | null
   monthly_take_home: number | null
+  primary_scenario_public_id: string | null
 }
 
 export interface ReadinessComponent {

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, DateTime, func
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
@@ -29,4 +29,9 @@ class User(Base):
     brokerage_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     retirement_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     monthly_take_home: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The scenario the dashboard headlines. Null = none chosen (fall back to the
+    # sole scenario if there is exactly one, else profile-based numbers).
+    primary_scenario_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("scenarios.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

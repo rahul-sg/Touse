@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 
 from app.db import get_db
 from app.models.user import User
+from app.models.scenario import Scenario
 from app.security import create_access_token, get_current_user_id, require_self
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -179,6 +180,19 @@ async def get_me(
     user = await _get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Resolve the primary scenario pointer to its public_id (only if still active).
+    primary_scenario_public_id = None
+    if user.primary_scenario_id is not None:
+        primary = await db.scalar(
+            select(Scenario).where(
+                Scenario.id == user.primary_scenario_id,
+                Scenario.is_active == True,
+            )
+        )
+        if primary:
+            primary_scenario_public_id = primary.public_id
+
     return {
         "user_id": user.id,
         "first_name": user.first_name,
@@ -199,6 +213,7 @@ async def get_me(
         "brokerage_value": user.brokerage_value,
         "retirement_value": user.retirement_value,
         "monthly_take_home": user.monthly_take_home,
+        "primary_scenario_public_id": primary_scenario_public_id,
     }
 
 

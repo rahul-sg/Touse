@@ -60,6 +60,15 @@
 }
 
 /* ── Stat shelf ── */
+.primaryLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.5rem;
+}
+.primaryLabel strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
 .statShelf {
   display: flex;
   border: 1px solid var(--color-border);

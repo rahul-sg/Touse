@@ -1,10 +1,24 @@
 import { useState, useCallback } from 'react'
 import { compareNowVsWait } from '../utils/api'
-import type { NowVsWaitResult, UserProfile } from '../types'
+import type { NowVsWaitResult } from '../types'
 import styles from './NowVsWait.module.css'
 
+/** Minimal financial shape — satisfied by both UserProfile and Scenario. */
+export interface NowVsWaitInputs {
+  annual_income: number | null
+  savings: number | null
+  down_payment: number | null
+  credit_score: number | null
+  monthly_debt_car: number
+  monthly_debt_student: number
+  monthly_debt_credit: number
+  monthly_debt_other: number
+  zip_code: string | null
+  monthly_take_home?: number | null
+}
+
 interface Props {
-  profile: UserProfile
+  profile: NowVsWaitInputs
   loanType?: string
 }
 

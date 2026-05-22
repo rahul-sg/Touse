@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.scenario import Scenario
+from app.models.user import User
 from app.security import get_current_user_id, require_self
 
 router = APIRouter(prefix="/api/v1/scenarios", tags=["scenarios"])
@@ -115,6 +116,11 @@ async def create_scenario(
     db.add(scenario)
     await db.commit()
     await db.refresh(scenario)
+    # A user's first scenario becomes their primary automatically.
+    user = await db.get(User, current_user_id)
+    if user and user.primary_scenario_id is None:
+        user.primary_scenario_id = scenario.id
+        await db.commit()
     return _serialize(scenario)
 
 
@@ -149,4 +155,26 @@ async def delete_scenario(
         raise HTTPException(status_code=404, detail="Scenario not found")
     require_self(scenario.user_id, current_user_id)
     scenario.is_active = False
+    # If this was the user's primary scenario, clear the pointer.
+    user = await db.get(User, current_user_id)
+    if user and user.primary_scenario_id == scenario.id:
+        user.primary_scenario_id = None
+    await db.commit()
+
+
+@router.patch("/{public_id}/primary", status_code=204)
+async def set_primary_scenario(
+    public_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """Mark a scenario as the user's primary (the one the dashboard headlines)."""
+    scenario = await db.scalar(
+        select(Scenario).where(Scenario.public_id == public_id)
+    )
+    if not scenario or not scenario.is_active:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    require_self(scenario.user_id, current_user_id)
+    user = await db.get(User, current_user_id)
+    user.primary_scenario_id = scenario.id
     await db.commit()

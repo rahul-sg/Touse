@@ -145,6 +145,11 @@ export async function deleteScenario(publicId: string): Promise<void> {
   await api.delete(`/api/v1/scenarios/${publicId}`)
 }
 
+/** Mark a scenario as the user's primary (drives the dashboard headline + map default). */
+export async function setPrimaryScenario(publicId: string): Promise<void> {
+  await api.patch(`/api/v1/scenarios/${publicId}/primary`)
+}
+
 export async function getReadiness(payload: ReadinessRequest): Promise<ReadinessResult> {
   const { data } = await api.post<ReadinessResult>('/api/v1/readiness', payload)
   return data
