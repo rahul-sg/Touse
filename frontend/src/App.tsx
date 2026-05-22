@@ -31,7 +31,7 @@ export default function App() {
             <Route path="/forecast/:zip" element={<Forecast />} />
             <Route path="/about" element={<About />} />
             <Route path="/scenarios" element={<Scenarios />} />
-            <Route path="/scenarios/:id" element={<ScenarioDetail />} />
+            <Route path="/scenarios/:publicId" element={<ScenarioDetail />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

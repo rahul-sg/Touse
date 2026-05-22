@@ -1,13 +1,26 @@
+import secrets
+import string
 from datetime import datetime
 from sqlalchemy import String, Float, Integer, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
+
+_PUBLIC_ID_ALPHABET = string.ascii_letters + string.digits
+
+
+def generate_public_id(length: int = 10) -> str:
+    """Random base62 token used as the non-enumerable identifier in URLs."""
+    return "".join(secrets.choice(_PUBLIC_ID_ALPHABET) for _ in range(length))
 
 
 class Scenario(Base):
     __tablename__ = "scenarios"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Non-enumerable identifier exposed in URLs and the API (the integer PK stays internal).
+    public_id: Mapped[str] = mapped_column(
+        String(16), unique=True, index=True, nullable=False, default=generate_public_id
+    )
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     scenario_type: Mapped[str] = mapped_column(String(10), nullable=False, default="buy")  # "buy" or "rent"

@@ -116,7 +116,7 @@ export interface ReadinessResult {
 }
 
 export interface Scenario {
-  id: number
+  public_id: string
   user_id: number
   name: string
   scenario_type: 'buy' | 'rent'

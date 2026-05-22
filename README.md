@@ -206,4 +206,4 @@ Touse/
 
 - **Forecasts** are 12-month Prophet projections from price history alone — honest confidence ranges, not guarantees. They extrapolate trend and seasonality; they do not model rate shocks or policy changes.
 - **Listing coordinates** come from the US Census geocoder. Addresses it can't match (≈25%) fall back to the ZIP centroid.
-- **Market data freshness** depends on re-running the ETLs — Freddie Mac PMMS updates weekly; FRED/BEA monthly/annually. Scheduling these (cron / Celery beat) is not yet wired up.
+- **Market data freshness** is kept current by a Celery Beat schedule (`backend/tasks/celery_app.py`): Freddie Mac mortgage rates weekly, FRED monthly, Zillow ZIP values + forecast retraining monthly, BEA quarterly. The `celery` and `celery-beat` services are included in `docker compose`; the worker image installs cmdstan at build time so forecast retraining works in-container.

@@ -135,7 +135,7 @@ export default function ScenarioForm({ userId, onClose, onCreated, editScenario 
       }
 
       const scenario = isEdit && editScenario
-        ? await updateScenario(editScenario.id, payload)
+        ? await updateScenario(editScenario.public_id, payload)
         : await createScenario(userId, payload)
 
       // Invalidate the scenarios cache so ScenarioDetail re-renders with fresh data

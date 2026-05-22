@@ -59,7 +59,7 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
 
       <div className={styles.actions}>
         <Link
-          to={`/scenarios/${scenario.id}`}
+          to={`/scenarios/${scenario.public_id}`}
           className={styles.viewBtn}
           onClick={e => e.stopPropagation()}
         >
@@ -69,7 +69,6 @@ export default function ScenarioCard({ scenario, isActive, onSelect, onDelete }:
           to="/map"
           state={{
             maxPrice: scenario.cached_max_price,
-            scenarioId: scenario.id,
             scenarioName: scenario.name,
             targetZip: scenario.zip_code ?? undefined,
           }}

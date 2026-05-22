@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [calcError, setCalcError] = useState(false)
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scenarios'>('overview')
-  const [activeScenarioId, setActiveScenarioId] = useState<number | null>(null)
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
 
   const userId = user?.user_id
@@ -121,16 +121,16 @@ export default function Dashboard() {
   const firstName = user?.first_name ?? 'there'
 
 
-  function handleDelete(scenarioId: number) {
-    deleteMutation.mutate(scenarioId, {
+  function handleDelete(publicId: string) {
+    deleteMutation.mutate(publicId, {
       onSuccess: () => {
-        if (activeScenarioId === scenarioId) setActiveScenarioId(null)
+        if (activeScenarioId === publicId) setActiveScenarioId(null)
       },
     })
   }
 
   function handleScenarioCreated(s: Scenario) {
-    setActiveScenarioId(s.id)
+    setActiveScenarioId(s.public_id)
     setActiveTab('scenarios')  // switch to My Scenarios tab so the new scenario is visible
     refetchScenarios()
   }
@@ -249,11 +249,11 @@ export default function Dashboard() {
                   <div className={styles.scenarioGrid}>
                     {previewScenarios.map(s => (
                       <ScenarioCard
-                        key={s.id}
+                        key={s.public_id}
                         scenario={s}
-                        isActive={activeScenarioId === s.id}
-                        onSelect={() => setActiveScenarioId(s.id)}
-                        onDelete={() => handleDelete(s.id)}
+                        isActive={activeScenarioId === s.public_id}
+                        onSelect={() => setActiveScenarioId(s.public_id)}
+                        onDelete={() => handleDelete(s.public_id)}
                       />
                     ))}
                   </div>
@@ -332,11 +332,11 @@ export default function Dashboard() {
               <div className={styles.scenarioGrid}>
                 {scenarios.map(s => (
                   <ScenarioCard
-                    key={s.id}
+                    key={s.public_id}
                     scenario={s}
-                    isActive={activeScenarioId === s.id}
-                    onSelect={() => setActiveScenarioId(s.id)}
-                    onDelete={() => handleDelete(s.id)}
+                    isActive={activeScenarioId === s.public_id}
+                    onSelect={() => setActiveScenarioId(s.public_id)}
+                    onDelete={() => handleDelete(s.public_id)}
                   />
                 ))}
               </div>

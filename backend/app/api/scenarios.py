@@ -48,7 +48,7 @@ class ScenarioUpdate(BaseModel):
 
 def _serialize(s: Scenario) -> dict:
     return {
-        "id": s.id,
+        "public_id": s.public_id,
         "user_id": s.user_id,
         "name": s.name,
         "scenario_type": s.scenario_type,
@@ -118,14 +118,14 @@ async def create_scenario(
     return _serialize(scenario)
 
 
-@router.put("/{scenario_id}")
+@router.put("/{public_id}")
 async def update_scenario(
-    scenario_id: int,
+    public_id: str,
     body: ScenarioUpdate,
     db: AsyncSession = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id),
 ):
-    result = await db.execute(select(Scenario).where(Scenario.id == scenario_id))
+    result = await db.execute(select(Scenario).where(Scenario.public_id == public_id))
     scenario = result.scalar_one_or_none()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -137,13 +137,13 @@ async def update_scenario(
     return _serialize(scenario)
 
 
-@router.delete("/{scenario_id}", status_code=204)
+@router.delete("/{public_id}", status_code=204)
 async def delete_scenario(
-    scenario_id: int,
+    public_id: str,
     db: AsyncSession = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id),
 ):
-    result = await db.execute(select(Scenario).where(Scenario.id == scenario_id))
+    result = await db.execute(select(Scenario).where(Scenario.public_id == public_id))
     scenario = result.scalar_one_or_none()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")

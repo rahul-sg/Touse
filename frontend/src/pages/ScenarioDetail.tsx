@@ -69,7 +69,7 @@ function ScoreRing({ score }: { score: number }) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ScenarioDetail() {
-  const { id } = useParams<{ id: string }>()
+  const { publicId } = useParams<{ publicId: string }>()
   const navigate = useNavigate()
   const { user, isLoggedIn } = useAuth()
 
@@ -78,8 +78,7 @@ export default function ScenarioDetail() {
   const [readinessLoading, setReadinessLoading] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
 
-  const scenarioId = Number(id)
-  const scenario = scenarios.find((s) => s.id === scenarioId)
+  const scenario = scenarios.find((s) => s.public_id === publicId)
 
   useEffect(() => {
     if (!scenario || scenario.annual_income == null) return
@@ -103,7 +102,7 @@ export default function ScenarioDetail() {
       .catch(() => setReadiness(null))
       .finally(() => setReadinessLoading(false))
   }, [
-    scenario?.id,
+    scenario?.public_id,
     scenario?.annual_income,
     scenario?.savings,
     scenario?.down_payment,
@@ -302,7 +301,6 @@ export default function ScenarioDetail() {
                   state: {
                     maxPrice: scenario.cached_max_price ?? 600_000,
                     scenarioName: scenario.name,
-                    scenarioId: scenario.id,
                     targetZip: scenario.zip_code ?? undefined,
                   },
                 })

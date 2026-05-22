@@ -12,7 +12,6 @@ interface LocationState {
   maxPrice?: number
   fromOnboarding?: boolean
   scenarioName?: string
-  scenarioId?: number
   /** When navigating from ScenarioDetail, center the map on the scenario's ZIP instead of user's target_zip */
   targetZip?: string
 }

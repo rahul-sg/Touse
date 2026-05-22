@@ -136,13 +136,13 @@ export async function createScenario(userId: number, payload: ScenarioPayload): 
   return data
 }
 
-export async function updateScenario(scenarioId: number, payload: Partial<ScenarioPayload>): Promise<Scenario> {
-  const { data } = await api.put(`/api/v1/scenarios/${scenarioId}`, payload)
+export async function updateScenario(publicId: string, payload: Partial<ScenarioPayload>): Promise<Scenario> {
+  const { data } = await api.put(`/api/v1/scenarios/${publicId}`, payload)
   return data
 }
 
-export async function deleteScenario(scenarioId: number): Promise<void> {
-  await api.delete(`/api/v1/scenarios/${scenarioId}`)
+export async function deleteScenario(publicId: string): Promise<void> {
+  await api.delete(`/api/v1/scenarios/${publicId}`)
 }
 
 export async function getReadiness(payload: ReadinessRequest): Promise<ReadinessResult> {

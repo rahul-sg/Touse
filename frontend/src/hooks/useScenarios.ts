@@ -21,7 +21,7 @@ export function useCreateScenario(userId: number) {
 export function useDeleteScenario(userId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (scenarioId: number) => deleteScenario(scenarioId),
+    mutationFn: (publicId: string) => deleteScenario(publicId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scenarios', userId] }),
   })
 }
@@ -29,8 +29,8 @@ export function useDeleteScenario(userId: number) {
 export function useUpdateScenario(userId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...payload }: { id: number } & Partial<ScenarioPayload>) =>
-      updateScenario(id, payload),
+    mutationFn: ({ publicId, ...payload }: { publicId: string } & Partial<ScenarioPayload>) =>
+      updateScenario(publicId, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scenarios', userId] }),
   })
 }
