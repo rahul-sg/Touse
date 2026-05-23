@@ -1,9 +1,13 @@
 """
-ZIP-level price projection — Prophet forecast trained on zip_price_history.
+ZIP-level price projection.
 
-This is the ZIP-native replacement for the (never-populated) metro forecast
-pipeline. Forecasts are trained on demand the first time a ZIP is requested,
-then cached in zip_forecast_results so subsequent requests are instant.
+Per-ZIP Prophet still produces the monthly trajectory and confidence band, but
+the 12-month endpoint is anchored to the global LightGBM panel model (read
+from zip_lgbm_predictions, written periodically by the train_global_lgbm task).
+If no LGBM prediction exists yet for a ZIP, the projection falls back to the
+older long-run-CAGR blend — graceful degradation, no service interruption.
+
+Forecasts are cached in zip_forecast_results so repeat requests are instant.
 """
 import asyncio
 import logging
@@ -16,12 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.zip_price_history import ZipPriceHistory
 from app.models.zip_forecast_result import ZipForecastResult
+from app.models.zip_lgbm_prediction import ZipLgbmPrediction
 
 # Prophet/Stan are chatty — keep their output out of the API logs.
 logging.getLogger("prophet").setLevel(logging.WARNING)
 logging.getLogger("cmdstanpy").setLevel(logging.WARNING)
 
-MODEL_VERSION = "prophet_zip_v2"
+MODEL_VERSION = "prophet_zip_v4_lgbm_smooth"
 MIN_MONTHS = 24          # Prophet needs a couple of years to learn seasonality
 FORECAST_MONTHS = 12
 HISTORY_TAIL_MONTHS = 6  # actuals shown before the projection for chart context
@@ -29,9 +34,12 @@ MAX_AGE_DAYS = 30        # re-train a cached forecast once it is older than this
 
 # Long-run anchoring — blend the Prophet trend toward the ZIP's multi-year CAGR
 # so a recent boom doesn't extrapolate at full slope for an entire year.
-CAGR_WINDOW_YEARS = 10
-CAGR_MIN, CAGR_MAX = -0.10, 0.12     # clamp the annual CAGR to a sane band
-BLEND_NEAR, BLEND_FAR = 0.85, 0.40   # Prophet weight at month 1 vs month 12
+CAGR_WINDOW_YEARS = 20
+CAGR_MIN, CAGR_MAX = -0.10, 0.06     # clamp the annual CAGR to a sane band
+BLEND_NEAR, BLEND_FAR = 0.30, 0.15   # Prophet weight at month 1 vs month 12
+# Heavy anchor weight throughout — Prophet provides shape + bands; the anchor
+# (LGBM endpoint, or long-run CAGR for cold-start ZIPs) drives the level so
+# the trajectory transitions smoothly from current_value to the endpoint.
 
 
 def _long_run_monthly_cagr(df: pd.DataFrame, last_actual, current_value: float) -> float:
@@ -50,6 +58,7 @@ def _long_run_monthly_cagr(df: pd.DataFrame, last_actual, current_value: float) 
 
 def _fit_and_forecast(
     history: list[tuple[date, float]],
+    blend_anchor_price: float | None = None,
 ) -> tuple[list[dict], float, float | None]:
     """Fit Prophet on monthly history and return (points, current_value, pct_12m).
 
@@ -57,8 +66,15 @@ def _fit_and_forecast(
     of actuals (zero-width band) followed by 12 projected months (widening band).
 
     The raw Prophet trend extrapolates the most recent slope linearly, which
-    over-projects after a boom. We blend each projected month toward the ZIP's
-    long-run CAGR — trusting Prophet near-term, the historical norm further out.
+    over-predicts after a boom. We blend each projected month toward an anchor
+    path — trusting Prophet near-term, the anchor further out:
+
+      - If `blend_anchor_price` is given (the global LightGBM model's 12-month
+        endpoint prediction), we anchor toward it. This is the production path:
+        backtest-validated, removes Prophet's systematic over-prediction bias.
+
+      - Otherwise we fall back to the ZIP's long-run CAGR — graceful behavior
+        for cold-start ZIPs the global model hasn't predicted for yet.
 
     CPU-bound and synchronous — call it via asyncio.to_thread.
     """
@@ -80,7 +96,18 @@ def _fit_and_forecast(
 
     last_actual = df["ds"].max()
     current_value = float(df.iloc[-1]["y"])
-    monthly_cagr = _long_run_monthly_cagr(df, last_actual, current_value)
+
+    # Pick the anchor monthly growth rate: LGBM-implied if available, else CAGR.
+    if blend_anchor_price and current_value > 0:
+        monthly_growth = (blend_anchor_price / current_value) ** (1 / FORECAST_MONTHS) - 1
+    else:
+        monthly_growth = _long_run_monthly_cagr(df, last_actual, current_value)
+
+    # Prophet's in-sample fit at the last actual month — used to rescale Prophet's
+    # trajectory so it starts from current_value (otherwise the in-sample/out-of-sample
+    # mismatch causes a visible jump in the first forecast month).
+    prophet_at_anchor = forecast.loc[forecast["ds"] == last_actual, "yhat"]
+    prophet_at_anchor = float(prophet_at_anchor.iloc[-1]) if not prophet_at_anchor.empty else current_value
 
     points: list[dict] = []
     # Tail of actuals — band collapses to the real value.
@@ -89,25 +116,33 @@ def _fit_and_forecast(
         v = round(float(row["y"]))
         points.append({"month": row["ds"].strftime("%Y-%m"), "price": v, "lower": v, "upper": v})
 
-    # Projected months — Prophet blended toward the long-run CAGR path.
+    # Projected months — Prophet (rescaled to start from current_value) blended
+    # toward the anchor path.
     future_only = forecast[forecast["ds"] > last_actual].reset_index(drop=True)
     last_blended = current_value
     for i, row in future_only.iterrows():
         t = i + 1  # months ahead (1..FORECAST_MONTHS)
         prophet_yhat = float(row["yhat"])
-        cagr_value = current_value * (1 + monthly_cagr) ** t
+        # Rescale: keep Prophet's relative shape, anchor its level to current_value.
+        prophet_scaled = current_value * (prophet_yhat / prophet_at_anchor) if prophet_at_anchor else prophet_yhat
+        anchor_value = current_value * (1 + monthly_growth) ** t
         if FORECAST_MONTHS > 1:
             weight = BLEND_NEAR - (BLEND_NEAR - BLEND_FAR) * (t - 1) / (FORECAST_MONTHS - 1)
         else:
             weight = BLEND_NEAR
-        blended = weight * prophet_yhat + (1 - weight) * cagr_value
-        delta = blended - prophet_yhat  # shift the band to recenter on the blend
+        blended = weight * prophet_scaled + (1 - weight) * anchor_value
+        # Preserve Prophet's band width (in % terms), recenter it on the blended value.
+        if prophet_yhat:
+            rel_lower = float(row["yhat_lower"]) / prophet_yhat
+            rel_upper = float(row["yhat_upper"]) / prophet_yhat
+        else:
+            rel_lower = rel_upper = 1.0
         last_blended = blended
         points.append({
             "month": row["ds"].strftime("%Y-%m"),
             "price": round(blended),
-            "lower": round(float(row["yhat_lower"]) + delta),
-            "upper": round(float(row["yhat_upper"]) + delta),
+            "lower": round(blended * rel_lower),
+            "upper": round(blended * rel_upper),
         })
 
     pct_12m: float | None = None
@@ -159,8 +194,18 @@ async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
     if len(history) < MIN_MONTHS:
         return None
 
+    # If the global LightGBM model has a prediction for this ZIP, use its
+    # 12-month endpoint to anchor the blend (production path). Otherwise the
+    # service falls back to the long-run-CAGR anchor inside _fit_and_forecast.
+    lgbm = await db.scalar(
+        select(ZipLgbmPrediction).where(ZipLgbmPrediction.zip_code == zip_code)
+    )
+    anchor_price = float(lgbm.predicted_endpoint_price) if lgbm else None
+
     # Prophet fitting is CPU-bound — run it off the event loop.
-    points, current_value, pct_12m = await asyncio.to_thread(_fit_and_forecast, history)
+    points, current_value, pct_12m = await asyncio.to_thread(
+        _fit_and_forecast, history, anchor_price
+    )
 
     if cached:
         cached.model_version = MODEL_VERSION

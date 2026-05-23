@@ -33,7 +33,13 @@ app.conf.beat_schedule = {
         "task": "tasks.etl_tasks.run_bea_etl",
         "schedule": crontab(month_of_year="1,4,7,10", day_of_month="1", hour="4", minute="0"),
     },
-    # Re-train cached ZIP forecasts the day after fresh Zillow data lands.
+    # Day after fresh Zillow data lands: train the global LightGBM panel +
+    # write per-ZIP 12-month endpoint predictions...
+    "ml-train-global-lgbm-monthly": {
+        "task": "tasks.ml_tasks.train_global_lgbm",
+        "schedule": crontab(day_of_month="16", hour="2", minute="0"),
+    },
+    # ...then re-train cached Prophet trajectories so they use the new anchors.
     "ml-refresh-zip-forecasts-monthly": {
         "task": "tasks.ml_tasks.refresh_zip_forecasts",
         "schedule": crontab(day_of_month="16", hour="4", minute="0"),

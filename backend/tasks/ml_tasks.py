@@ -1,9 +1,14 @@
 """
-Celery task for keeping ZIP price forecasts fresh.
+Celery tasks for the ZIP forecasting pipeline.
 
-ZIP forecasts are trained on demand and cached in zip_forecast_results with a
-30-day TTL. This task proactively re-trains the stalest cached forecasts so
-popular ZIPs never go stale and returning users skip the on-demand training wait.
+  train_global_lgbm     — fits the global LightGBM panel model and writes a
+                          12-month endpoint prediction for every ZIP. Runs
+                          monthly, after fresh Zillow data lands.
+
+  refresh_zip_forecasts — re-fits the per-ZIP Prophet trajectory for the
+                          stalest cached forecasts, using the latest LGBM
+                          endpoint as the blend anchor. Runs monthly, after
+                          train_global_lgbm.
 """
 import os
 from datetime import datetime
@@ -21,14 +26,28 @@ _DB_URL = os.environ.get(
 MAX_REFRESH_PER_RUN = 500
 
 
+@app.task(name="tasks.ml_tasks.train_global_lgbm", bind=True, max_retries=1)
+def train_global_lgbm(self):
+    """Fit the global LightGBM panel model and persist per-ZIP predictions."""
+    try:
+        from app.ml.train_lgbm import train_and_save_predictions
+        n = train_and_save_predictions()
+        print(f"train_global_lgbm: wrote {n} predictions")
+    except Exception as exc:
+        # Big job; retry once after an hour rather than hammering.
+        raise self.retry(exc=exc, countdown=60 * 60)
+
+
 @app.task(name="tasks.ml_tasks.refresh_zip_forecasts", bind=True, max_retries=2)
 def refresh_zip_forecasts(self):
-    """Re-train the Prophet forecast for the stalest cached ZIPs (capped per run)."""
+    """Re-train the Prophet trajectory for the stalest cached ZIPs (capped per run),
+    anchored to the latest LGBM 12-month endpoint."""
     try:
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
 
         from app.models.zip_forecast_result import ZipForecastResult
+        from app.models.zip_lgbm_prediction import ZipLgbmPrediction
         from app.models.zip_price_history import ZipPriceHistory
         from app.services.zip_projection import _fit_and_forecast, MODEL_VERSION, MIN_MONTHS
 
@@ -54,7 +73,12 @@ def refresh_zip_forecasts(self):
                 if len(history) < MIN_MONTHS:
                     continue
 
-                points, current_value, pct = _fit_and_forecast(history)
+                lgbm = session.execute(
+                    select(ZipLgbmPrediction).where(ZipLgbmPrediction.zip_code == zip_code)
+                ).scalar_one_or_none()
+                anchor_price = float(lgbm.predicted_endpoint_price) if lgbm else None
+
+                points, current_value, pct = _fit_and_forecast(history, anchor_price)
                 row = session.execute(
                     select(ZipForecastResult).where(ZipForecastResult.zip_code == zip_code)
                 ).scalar_one()

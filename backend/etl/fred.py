@@ -25,6 +25,9 @@ SERIES = {
     "cpi": "CPIAUCSL",
     "housing_starts": "HOUST",
     "unemployment": "UNRATE",
+    # Sentiment / demand-side housing signals — useful as ML features.
+    "consumer_sentiment": "UMCSENT",   # Univ. of Michigan consumer sentiment, monthly
+    "new_home_sales": "HSN1F",         # New single-family home sales, monthly
 }
 
 
