@@ -7,6 +7,7 @@ from app.models.forecast_result import ForecastResult
 from app.models.listing import ListingCache
 from app.models.zip_forecast_result import ZipForecastResult
 from app.models.zip_lgbm_prediction import ZipLgbmPrediction
+from app.models.metro_supply_history import MetroSupplyHistory
 from app.models.contact_message import ContactMessage
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "ListingCache",
     "ZipForecastResult",
     "ZipLgbmPrediction",
+    "MetroSupplyHistory",
     "ContactMessage",
 ]

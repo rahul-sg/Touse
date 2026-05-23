@@ -38,8 +38,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.ml.backtest import DEFAULT_MIN_TRAIN, DEFAULT_FOLDS  # match Prophet baseline scope
 from app.models.zip_lgbm_prediction import ZipLgbmPrediction
+from etl.zillow_metro import normalize_metro  # noqa: E402 — keep DB models above
 
-MODEL_VERSION = "lgbm_panel_v1"
+MODEL_VERSION = "lgbm_panel_v2_supply"
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -54,14 +55,30 @@ SAMPLE_DEFAULT = 30          # same sample size as Prophet baseline
 # ── Feature engineering ───────────────────────────────────────────────────────
 
 def _load_prices(engine) -> pd.DataFrame:
-    """All monthly ZIP prices, sorted by (zip, date)."""
+    """All monthly ZIP prices + metro, sorted by (zip, date)."""
     df = pd.read_sql(
-        "SELECT zip_code, date, median_value FROM zip_price_history "
+        "SELECT zip_code, date, median_value, metro FROM zip_price_history "
         "WHERE median_value IS NOT NULL",
         engine,
     )
     df["date"] = pd.to_datetime(df["date"])
+    df["metro_norm"] = df["metro"].fillna("").map(normalize_metro)
     return df.sort_values(["zip_code", "date"]).reset_index(drop=True)
+
+
+def _load_metro_supply(engine) -> pd.DataFrame:
+    """Zillow metro supply panel with within-metro YoY derivations."""
+    df = pd.read_sql(
+        "SELECT metro, date, invt_fs, new_listings, mean_doz_pending, "
+        "perc_price_cut, median_list_price FROM metro_supply_history",
+        engine,
+    )
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values(["metro", "date"])
+    g = df.groupby("metro", sort=False)
+    df["invt_fs_yoy"] = df["invt_fs"] / g["invt_fs"].shift(12) - 1
+    df["new_listings_yoy"] = df["new_listings"] / g["new_listings"].shift(12) - 1
+    return df.rename(columns={"metro": "metro_norm"})
 
 
 def _load_macro(engine) -> pd.DataFrame:
@@ -118,6 +135,12 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
         direction="backward",
     ).sort_values(["zip_code", "date"]).reset_index(drop=True)
 
+    # Metro supply join — same month, by normalized metro name. Same-month is
+    # OK (not leakage): supply at month t and price-growth from t→t+12 are
+    # contemporaneous → future as far as the target is concerned.
+    supply = _load_metro_supply(engine)
+    prices = prices.merge(supply, on=["metro_norm", "date"], how="left")
+
     feature_cols = [
         "price_lag_1m", "price_lag_3m", "price_lag_6m", "price_lag_12m", "price_lag_24m",
         "growth_1m", "growth_3m", "growth_6m", "growth_12m",
@@ -126,6 +149,9 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
         "mortgage_rate_change_3m",
         "cpi_yoy", "unemployment", "fed_funds_rate", "housing_starts",
         "consumer_sentiment", "new_home_sales",
+        # Metro supply / demand signals (Zillow Research)
+        "invt_fs", "new_listings", "mean_doz_pending", "perc_price_cut",
+        "invt_fs_yoy", "new_listings_yoy",
         "month_sin", "month_cos",
         "zip_code",  # categorical
     ]

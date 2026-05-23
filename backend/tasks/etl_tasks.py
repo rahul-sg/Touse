@@ -37,6 +37,16 @@ def run_zillow_zip_etl(self):
         raise self.retry(exc=exc, countdown=60 * 10)
 
 
+@app.task(name="tasks.etl_tasks.run_zillow_metro_etl", bind=True, max_retries=3)
+def run_zillow_metro_etl(self):
+    """Refresh metro-level supply/demand indicators from Zillow Research."""
+    try:
+        from etl.zillow_metro import run
+        run()
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60 * 10)
+
+
 @app.task(name="tasks.etl_tasks.run_bea_etl", bind=True, max_retries=3)
 def run_bea_etl(self):
     """Refresh state-level GDP growth from the BEA."""

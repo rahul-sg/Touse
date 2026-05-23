@@ -28,6 +28,11 @@ app.conf.beat_schedule = {
         "task": "tasks.etl_tasks.run_zillow_zip_etl",
         "schedule": crontab(day_of_month="15", hour="3", minute="0"),
     },
+    # Zillow metro supply / demand indicators publish on the same cadence.
+    "etl-zillow-metro-monthly": {
+        "task": "tasks.etl_tasks.run_zillow_metro_etl",
+        "schedule": crontab(day_of_month="15", hour="3", minute="30"),
+    },
     # BEA state GDP is annual — a quarterly pass is plenty.
     "etl-bea-quarterly": {
         "task": "tasks.etl_tasks.run_bea_etl",
