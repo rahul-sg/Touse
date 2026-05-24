@@ -26,7 +26,7 @@ from app.models.zip_lgbm_prediction import ZipLgbmPrediction
 logging.getLogger("prophet").setLevel(logging.WARNING)
 logging.getLogger("cmdstanpy").setLevel(logging.WARNING)
 
-MODEL_VERSION = "prophet_zip_v4_lgbm_smooth"
+MODEL_VERSION = "prophet_zip_v6_typed"
 MIN_MONTHS = 24          # Prophet needs a couple of years to learn seasonality
 FORECAST_MONTHS = 12
 HISTORY_TAIL_MONTHS = 6  # actuals shown before the projection for chart context
@@ -152,9 +152,13 @@ def _fit_and_forecast(
     return points, current_value, pct_12m
 
 
+VALID_HOME_TYPES = ("all", "single_family", "condo")
+
+
 def _serialize(row: ZipForecastResult) -> dict:
     return {
         "zip_code": row.zip_code,
+        "home_type": row.home_type,
         "model_version": row.model_version,
         "trained_at": row.trained_at.isoformat(),
         "current_value": row.current_value,
@@ -164,13 +168,19 @@ def _serialize(row: ZipForecastResult) -> dict:
     }
 
 
-async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
-    """Return a cached projection for the ZIP, training one on demand if needed.
+async def get_or_train(zip_code: str, db: AsyncSession, home_type: str = "all") -> dict | None:
+    """Return a cached projection for the (ZIP, home_type), training on demand.
 
-    Returns None when the ZIP has too little price history to model.
+    Returns None when there's too little price history for that home type to model.
     """
+    if home_type not in VALID_HOME_TYPES:
+        home_type = "all"
+
     cached = await db.scalar(
-        select(ZipForecastResult).where(ZipForecastResult.zip_code == zip_code)
+        select(ZipForecastResult).where(
+            ZipForecastResult.zip_code == zip_code,
+            ZipForecastResult.home_type == home_type,
+        )
     )
     # Reuse the cache only if it's fresh AND from the current model version.
     if (
@@ -185,6 +195,7 @@ async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
             select(ZipPriceHistory.date, ZipPriceHistory.median_value)
             .where(
                 ZipPriceHistory.zip_code == zip_code,
+                ZipPriceHistory.home_type == home_type,
                 ZipPriceHistory.median_value.isnot(None),
             )
             .order_by(ZipPriceHistory.date)
@@ -194,11 +205,14 @@ async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
     if len(history) < MIN_MONTHS:
         return None
 
-    # If the global LightGBM model has a prediction for this ZIP, use its
-    # 12-month endpoint to anchor the blend (production path). Otherwise the
-    # service falls back to the long-run-CAGR anchor inside _fit_and_forecast.
+    # If the global LightGBM model has a prediction for this (ZIP, home_type),
+    # use its 12-month endpoint as the blend anchor. Otherwise fall back to the
+    # long-run-CAGR anchor inside _fit_and_forecast.
     lgbm = await db.scalar(
-        select(ZipLgbmPrediction).where(ZipLgbmPrediction.zip_code == zip_code)
+        select(ZipLgbmPrediction).where(
+            ZipLgbmPrediction.zip_code == zip_code,
+            ZipLgbmPrediction.home_type == home_type,
+        )
     )
     anchor_price = float(lgbm.predicted_endpoint_price) if lgbm else None
 
@@ -218,6 +232,7 @@ async def get_or_train(zip_code: str, db: AsyncSession) -> dict | None:
     else:
         row = ZipForecastResult(
             zip_code=zip_code,
+            home_type=home_type,
             model_version=MODEL_VERSION,
             trained_at=datetime.utcnow(),
             current_value=current_value,

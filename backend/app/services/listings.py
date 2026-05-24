@@ -11,6 +11,48 @@ from app.services.geocoding import geocode_many
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_HOST = "realty-us.p.rapidapi.com"
 CACHE_TTL_HOURS = 6
+CACHE_RESULT_LIMIT = 42
+
+# Canonical property types our filters speak (matches the frontend chip set).
+_PROPERTY_TYPE_MAP = {
+    "single_family": "single_family",
+    "single_family_residence": "single_family",
+    "single family": "single_family",
+    "sfr": "single_family",
+    "condo": "condo",
+    "condos": "condo",
+    "condominium": "condo",
+    "co_op": "condo",
+    "coop": "condo",
+    "townhome": "townhouse",
+    "townhomes": "townhouse",
+    "townhouse": "townhouse",
+    "townhouses": "townhouse",
+    "multi_family": "multi_family",
+    "multi-family": "multi_family",
+    "duplex_triplex": "multi_family",
+    "mobile": "mobile",
+    "manufactured": "mobile",
+    "mobile_home": "mobile",
+    "land": "land",
+    "lot": "land",
+    "farm": "land",
+}
+
+
+def _normalize_property_type(raw) -> str | None:
+    """Normalize RapidAPI's varied property-type strings to a small canonical set."""
+    if not raw:
+        return None
+    key = str(raw).strip().lower()
+    return _PROPERTY_TYPE_MAP.get(key, key)  # unknown → store as-is rather than drop
+
+
+def _coerce_int(v) -> int | None:
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _bbox_polygon(lat: float, lng: float, radius_miles: float) -> list[list[float]]:
@@ -20,7 +62,6 @@ def _bbox_polygon(lat: float, lng: float, radius_miles: float) -> list[list[floa
     lng_delta = radius_miles / (69.0 * math.cos(math.radians(lat)))
     n, s = lat + lat_delta, lat - lat_delta
     e, w = lng + lng_delta, lng - lng_delta
-    # Closed polygon: 5 points, GeoJSON order [lng, lat]
     return [[w, n], [e, n], [e, s], [w, s], [w, n]]
 
 
@@ -43,9 +84,8 @@ async def _fetch_from_rapidapi(
         resp.raise_for_status()
         data = resp.json()
 
-    # Response: {"data": {"count": N, "total": N, "results": [...]}, ...}
     results = (data.get("data") or {}).get("results") or []
-    listings = []
+    listings: list[dict] = []
     for prop in results:
         loc = prop.get("location", {})
         address = loc.get("address", {})
@@ -75,12 +115,14 @@ async def _fetch_from_rapidapi(
             "zip_code": zipcode,
             "listing_url": prop.get("href") or f"https://www.realtor.com/realestateandhomes-detail/{prop.get('property_id','')}",
             "photo_url": photo,
+            "property_type": _normalize_property_type(desc.get("type")),
+            "sqft": _coerce_int(desc.get("sqft")),
+            "lot_sqft": _coerce_int(desc.get("lot_sqft")),
+            "year_built": _coerce_int(desc.get("year_built")),
             "fetched_at": datetime.utcnow(),
         })
 
-    # The listings API often omits per-property coordinates. Geocode those
-    # addresses via the US Census geocoder so each pin lands at its true
-    # location. Fall back to the ZIP center only when geocoding also fails.
+    # Geocode addresses missing coordinates so each pin lands at its true location.
     missing = [l for l in listings if l["lat"] is None or l["lng"] is None]
     if missing:
         geocoded = await geocode_many([l["address"] for l in missing])
@@ -97,35 +139,80 @@ def _mock_listings(lat: float, lng: float, max_price: float, min_beds: int) -> l
     """Dev fallback when no RAPIDAPI_KEY is set."""
     import random
     random.seed(int(lat * 100 + lng * 100))
-    results = []
+    types = ["single_family", "condo", "townhouse"]
+    out = []
     for i in range(12):
         price = random.randint(int(max_price * 0.5), int(max_price))
-        beds = random.randint(min_beds, min_beds + 2)
-        results.append({
+        out.append({
             "id": f"mock-{i}",
             "address": f"{random.randint(100,9999)} Example St, Mock City, US",
             "price": price,
-            "beds": beds,
+            "beds": random.randint(min_beds, min_beds + 2),
             "baths": random.choice([1.0, 1.5, 2.0, 2.5, 3.0]),
             "lat": lat + random.uniform(-0.05, 0.05),
             "lng": lng + random.uniform(-0.05, 0.05),
             "listing_url": "#",
+            "property_type": random.choice(types),
+            "sqft": random.choice([900, 1200, 1500, 1800, 2200, 2800]),
+            "lot_sqft": random.choice([None, 3000, 5500, 8000]),
+            "year_built": random.choice([1965, 1985, 1998, 2005, 2015]),
         })
-    return results
+    return out
 
 
 async def _upsert_cache(db: AsyncSession, listings: list[dict]) -> None:
     if not listings:
         return
+    refresh_cols = (
+        "price", "fetched_at",
+        "property_type", "sqft", "lot_sqft", "year_built",
+    )
     stmt = insert(ListingCache).values(listings).on_conflict_do_update(
         constraint="uq_listing_source",
-        set_={
-            "price": insert(ListingCache).excluded.price,
-            "fetched_at": insert(ListingCache).excluded.fetched_at,
-        },
+        set_={c: insert(ListingCache).excluded[c] for c in refresh_cols},
     )
     await db.execute(stmt)
     await db.commit()
+
+
+def _serialize_cached(c: ListingCache) -> dict:
+    return {
+        "id": str(c.id),
+        "address": c.address,
+        "price": float(c.price),
+        "beds": c.beds,
+        "baths": float(c.baths) if c.baths else None,
+        "lat": float(c.lat),
+        "lng": float(c.lng),
+        "listing_url": c.listing_url,
+        "photo_url": c.photo_url,
+        "property_type": c.property_type,
+        "sqft": c.sqft,
+        "lot_sqft": c.lot_sqft,
+        "year_built": c.year_built,
+    }
+
+
+def _matches_filters(
+    r: dict,
+    max_price: float,
+    min_beds: int,
+    property_types: list[str] | None,
+    min_sqft: int | None,
+    min_year_built: int | None,
+) -> bool:
+    """Apply user filters to a freshly-fetched listing dict (cache path filters in SQL)."""
+    if r["price"] > max_price:
+        return False
+    if r["beds"] is not None and r["beds"] < min_beds:
+        return False
+    if property_types and r.get("property_type") not in property_types:
+        return False
+    if min_sqft is not None and r.get("sqft") is not None and r["sqft"] < min_sqft:
+        return False
+    if min_year_built is not None and r.get("year_built") is not None and r["year_built"] < min_year_built:
+        return False
+    return True
 
 
 async def get_listings(
@@ -135,51 +222,44 @@ async def get_listings(
     max_price: float,
     min_beds: int,
     db: AsyncSession,
+    property_types: list[str] | None = None,
+    min_sqft: int | None = None,
+    min_year_built: int | None = None,
 ) -> list[dict]:
     if not RAPIDAPI_KEY:
-        return _mock_listings(lat, lng, max_price, min_beds)
+        # Apply the same filters to mock data so the UI behaves identically.
+        raw = _mock_listings(lat, lng, max_price, min_beds)
+        return [r for r in raw if _matches_filters(r, max_price, min_beds, property_types, min_sqft, min_year_built)]
 
-    # Bounding box for cache lookup (~radius_miles converted to degrees)
     import math as _math
     lat_delta = radius_miles / 69.0
     lng_delta = radius_miles / (69.0 * _math.cos(_math.radians(lat)))
 
-    # Check cache freshness — must also be geographically nearby
     stale_cutoff = datetime.utcnow() - timedelta(hours=CACHE_TTL_HOURS)
+    filters = [
+        ListingCache.price <= max_price,
+        # Listings with unknown bed count stay in — better to show than hide.
+        or_(ListingCache.beds.is_(None), ListingCache.beds >= min_beds),
+        ListingCache.fetched_at >= stale_cutoff,
+        ListingCache.lat.between(lat - lat_delta, lat + lat_delta),
+        ListingCache.lng.between(lng - lng_delta, lng + lng_delta),
+    ]
+    if property_types:
+        # Strict — if the user filters to "condo only" we exclude unknown types.
+        filters.append(ListingCache.property_type.in_(property_types))
+    if min_sqft is not None:
+        filters.append(or_(ListingCache.sqft.is_(None), ListingCache.sqft >= min_sqft))
+    if min_year_built is not None:
+        filters.append(or_(ListingCache.year_built.is_(None), ListingCache.year_built >= min_year_built))
+
     result = await db.execute(
-        select(ListingCache)
-        .where(
-            and_(
-                ListingCache.price <= max_price,
-                # Include listings with unknown bed count (NULL) — better to show and let user judge
-                or_(ListingCache.beds.is_(None), ListingCache.beds >= min_beds),
-                ListingCache.fetched_at >= stale_cutoff,
-                ListingCache.lat.between(lat - lat_delta, lat + lat_delta),
-                ListingCache.lng.between(lng - lng_delta, lng + lng_delta),
-            )
-        )
-        .limit(42)
+        select(ListingCache).where(and_(*filters)).limit(CACHE_RESULT_LIMIT)
     )
     cached = result.scalars().all()
-
     if cached:
-        return [
-            {
-                "id": str(c.id),
-                "address": c.address,
-                "price": float(c.price),
-                "beds": c.beds,
-                "baths": float(c.baths) if c.baths else None,
-                "lat": float(c.lat),
-                "lng": float(c.lng),
-                "listing_url": c.listing_url,
-                "photo_url": getattr(c, "photo_url", None),
-            }
-            for c in cached
-        ]
+        return [_serialize_cached(c) for c in cached]
 
-    # Fetch fresh from API. RapidAPI returns everything in the polygon regardless
-    # of price/beds, so apply the same filter the cache query uses before returning.
+    # Cache miss → fetch fresh + upsert, then apply user filters.
     raw = await _fetch_from_rapidapi(lat, lng, radius_miles, max_price, min_beds)
     await _upsert_cache(db, raw)
     return [
@@ -193,7 +273,11 @@ async def get_listings(
             "lng": r["lng"],
             "listing_url": r["listing_url"],
             "photo_url": r.get("photo_url"),
+            "property_type": r.get("property_type"),
+            "sqft": r.get("sqft"),
+            "lot_sqft": r.get("lot_sqft"),
+            "year_built": r.get("year_built"),
         }
         for r in raw
-        if r["price"] <= max_price and (r["beds"] is None or r["beds"] >= min_beds)
+        if _matches_filters(r, max_price, min_beds, property_types, min_sqft, min_year_built)
     ]

@@ -6,7 +6,7 @@ import ZipForecastPanel from '../components/ZipForecastPanel'
 import { useListings } from '../hooks/useListings'
 import { usePrimaryScenario } from '../hooks/usePrimaryScenario'
 import { lookupZip, getNearestZip } from '../utils/api'
-import type { Listing } from '../types'
+import type { Listing, PropertyType } from '../types'
 import styles from './MapView.module.css'
 
 interface LocationState {
@@ -40,6 +40,9 @@ export default function MapView() {
   const scenarioName = state?.scenarioName ?? null
   const [maxPrice, setMaxPrice] = useState(state?.maxPrice ?? DEFAULT_MAX_PRICE)
   const [minBeds, setMinBeds] = useState(1)
+  const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>([])
+  const [minSqft, setMinSqft] = useState<number | undefined>(undefined)
+  const [minYearBuilt, setMinYearBuilt] = useState<number | undefined>(undefined)
   const [focusedListing, setFocusedListing] = useState<Listing | null>(null)
 
   const [viewport, setViewport] = useState(DEFAULT_CENTER)
@@ -87,7 +90,15 @@ export default function MapView() {
   const { data: listings = [], isFetching } = useListings(
     zipLookupPending
       ? null  // suppress the wasted US-center query while the target ZIP is resolving
-      : { lat: viewport.lat, lng: viewport.lng, maxPrice, minBeds }
+      : {
+          lat: viewport.lat,
+          lng: viewport.lng,
+          maxPrice,
+          minBeds,
+          propertyTypes,
+          minSqft,
+          minYearBuilt,
+        }
   )
 
   const handleViewportChange = useCallback((lat: number, lng: number) => {
@@ -138,6 +149,12 @@ export default function MapView() {
           onMaxPriceChange={setMaxPrice}
           minBeds={minBeds}
           onMinBedsChange={setMinBeds}
+          propertyTypes={propertyTypes}
+          onPropertyTypesChange={setPropertyTypes}
+          minSqft={minSqft}
+          onMinSqftChange={setMinSqft}
+          minYearBuilt={minYearBuilt}
+          onMinYearBuiltChange={setMinYearBuilt}
           zipForecastPanel={forecastPanel}
           onListingClick={setFocusedListing}
           selectedId={focusedListing?.id ?? null}

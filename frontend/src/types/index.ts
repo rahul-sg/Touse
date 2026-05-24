@@ -44,6 +44,8 @@ export interface MetroForecast {
   note?: string
 }
 
+export type PropertyType = 'single_family' | 'condo' | 'townhouse' | 'multi_family' | 'mobile' | 'land'
+
 export interface Listing {
   id: string
   address: string
@@ -54,6 +56,10 @@ export interface Listing {
   lng: number
   listing_url: string
   photo_url?: string | null
+  property_type?: PropertyType | string | null
+  sqft?: number | null
+  lot_sqft?: number | null
+  year_built?: number | null
 }
 
 export interface MarketIndicators {
@@ -132,6 +138,8 @@ export interface Scenario {
   monthly_debt_other: number
   zip_code: string | null
   loan_type: string
+  /** Forecast/affordability scope: 'all' (default), 'single_family', or 'condo'. */
+  home_type: string
   cached_max_price: number | null
   cached_monthly_payment: number | null
   cached_rate_used: number | null

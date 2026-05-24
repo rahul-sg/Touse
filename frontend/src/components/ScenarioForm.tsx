@@ -37,6 +37,7 @@ const CREDIT_OPTIONS = [
 ]
 
 type LoanType = 'conventional' | 'fha' | 'va' | 'usda' | 'arm_5_1' | 'jumbo'
+type HomeType = 'all' | 'single_family' | 'condo'
 
 const LOAN_TYPES: { value: LoanType; label: string; hint: string }[] = [
   { value: 'conventional', label: 'Conventional', hint: '5% down, 36% DTI' },
@@ -47,6 +48,12 @@ const LOAN_TYPES: { value: LoanType; label: string; hint: string }[] = [
   { value: 'jumbo', label: 'Jumbo', hint: '>$766k conforming' },
 ]
 
+const HOME_TYPES: { value: HomeType; label: string; hint: string }[] = [
+  { value: 'all',           label: 'Any',           hint: 'Combined SFR + condo index' },
+  { value: 'single_family', label: 'Single Family', hint: 'Houses + townhomes' },
+  { value: 'condo',         label: 'Condo / Co-op', hint: 'Attached units' },
+]
+
 export default function ScenarioForm({ userId, onClose, onCreated, editScenario }: Props) {
   const isEdit = Boolean(editScenario)
   const queryClient = useQueryClient()
@@ -55,6 +62,9 @@ export default function ScenarioForm({ userId, onClose, onCreated, editScenario 
   )
   const [loanType, setLoanType] = useState<LoanType>(
     (editScenario?.loan_type as LoanType) ?? 'conventional'
+  )
+  const [homeType, setHomeType] = useState<HomeType>(
+    (editScenario?.home_type as HomeType) ?? 'all'
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -129,6 +139,7 @@ export default function ScenarioForm({ userId, onClose, onCreated, editScenario 
         monthly_debt_other: Number(values.monthly_debt_other),
         zip_code: values.zip_code,
         loan_type: mode === 'buy' ? loanType : undefined,
+        home_type: homeType,
         cached_max_price: cachedMaxPrice,
         cached_monthly_payment: cachedMonthlyPayment,
         cached_rate_used: cachedRateUsed,
@@ -187,6 +198,20 @@ export default function ScenarioForm({ userId, onClose, onCreated, editScenario 
                 >
                   <span className={styles.loanTypeName}>{lt.label}</span>
                   <span className={styles.loanTypeHint}>{lt.hint}</span>
+                </button>
+              ))}
+            </div>
+            <p className={styles.loanTypeLabel} style={{ marginTop: '0.85rem' }}>Home type</p>
+            <div className={styles.loanTypeGrid}>
+              {HOME_TYPES.map(ht => (
+                <button
+                  key={ht.value}
+                  type="button"
+                  className={`${styles.loanTypeBtn} ${homeType === ht.value ? styles.loanTypeBtnActive : ''}`}
+                  onClick={() => setHomeType(ht.value)}
+                >
+                  <span className={styles.loanTypeName}>{ht.label}</span>
+                  <span className={styles.loanTypeHint}>{ht.hint}</span>
                 </button>
               ))}
             </div>

@@ -106,15 +106,17 @@ async def nearest_zip(
 async def zip_forecast(
     request: Request,
     zip: str = Query(..., min_length=3, max_length=10),
+    home_type: str = Query(default="all", regex="^(all|single_family|condo)$"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return price trend indicators for a ZIP code from zip_price_history."""
+    """Return price trend indicators for a (ZIP, home_type) from zip_price_history."""
     zip_clean = zip.strip().zfill(5)
     cutoff = date.today() - timedelta(days=365 * 3)  # last 3 years
 
     result = await db.execute(
         select(ZipPriceHistory)
         .where(ZipPriceHistory.zip_code == zip_clean)
+        .where(ZipPriceHistory.home_type == home_type)
         .where(ZipPriceHistory.date >= cutoff)
         .order_by(ZipPriceHistory.date)
     )
@@ -188,15 +190,16 @@ async def zip_forecast(
 async def zip_projection(
     request: Request,
     zip: str = Query(..., min_length=3, max_length=10),
+    home_type: str = Query(default="all", regex="^(all|single_family|condo)$"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return a 12-month Prophet price projection for a ZIP code.
+    """Return a 12-month Prophet price projection for a (ZIP, home_type).
 
-    Trains the model on demand the first time a ZIP is requested (a few
-    seconds), then serves the cached result instantly on later requests.
+    Trains the model on demand the first time a (ZIP, home_type) is requested
+    (a few seconds), then serves the cached result instantly on later requests.
     """
     zip_clean = zip.strip().zfill(5)
-    result = await get_or_train(zip_clean, db)
+    result = await get_or_train(zip_clean, db, home_type=home_type)
     if result is None:
         raise HTTPException(
             status_code=404,

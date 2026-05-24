@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import ForecastChart from '../components/ForecastChart'
 import { getZipForecast, getZipProjection, getMarketContext } from '../utils/api'
 import type { ZipProjection, MarketContext } from '../utils/api'
 import type { ForecastPoint } from '../types'
 import styles from './Forecast.module.css'
+
+type HomeType = 'all' | 'single_family' | 'condo'
+const HOME_TYPE_OPTIONS: { value: HomeType; label: string }[] = [
+  { value: 'all',           label: 'All homes' },
+  { value: 'single_family', label: 'Single family' },
+  { value: 'condo',         label: 'Condo' },
+]
+const ALLOWED_HOME_TYPES: HomeType[] = ['all', 'single_family', 'condo']
 
 // ── Rate scenarios ───────────────────────────────────────────────────────────
 // The Prophet model is univariate — it cannot see interest rates. These
@@ -74,6 +82,18 @@ interface ZipTrends {
 
 export default function Forecast() {
   const { zip } = useParams<{ zip: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const urlType = searchParams.get('type') as HomeType | null
+  const homeType: HomeType =
+    urlType && ALLOWED_HOME_TYPES.includes(urlType) ? urlType : 'all'
+
+  function setHomeType(t: HomeType) {
+    const next = new URLSearchParams(searchParams)
+    if (t === 'all') next.delete('type')
+    else next.set('type', t)
+    setSearchParams(next, { replace: true })
+  }
 
   const [trends, setTrends] = useState<ZipTrends | null>(null)
   const [projection, setProjection] = useState<ZipProjection | null>(null)
@@ -90,23 +110,26 @@ export default function Forecast() {
     setError(null)
     setTrends(null)
     setProjection(null)
-    setMarketContext(null)
+    // marketContext doesn't depend on home_type — keep it across switches.
 
-    getZipForecast(zip)
+    getZipForecast(zip, homeType)
       .then(setTrends)
-      .catch(() => setError('No price history is available for this ZIP code yet.'))
+      .catch(() => setError(`No ${homeType === 'all' ? '' : homeType.replace('_', ' ') + ' '}price history yet for this ZIP.`))
       .finally(() => setTrendsLoading(false))
 
-    // The projection trains a Prophet model on first request (a few seconds).
-    getZipProjection(zip)
+    // The projection trains a Prophet model on first request per (ZIP, home_type).
+    getZipProjection(zip, homeType)
       .then(setProjection)
       .catch(() => setProjection(null))
       .finally(() => setProjLoading(false))
 
-    getMarketContext(zip)
-      .then(setMarketContext)
-      .catch(() => setMarketContext(null))
-  }, [zip])
+    if (!marketContext) {
+      getMarketContext(zip)
+        .then(setMarketContext)
+        .catch(() => setMarketContext(null))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zip, homeType])
 
   const place = trends ? [trends.city, trends.state].filter(Boolean).join(', ') : ''
   const proj12m = projection?.forecast_12m_pct ?? null
@@ -128,6 +151,19 @@ export default function Forecast() {
         </div>
 
         <h1 className={styles.title}>{place || `ZIP ${zip}`}</h1>
+
+        <div className={styles.rateToggle} style={{ marginBottom: '0.75rem' }}>
+          {HOME_TYPE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              className={`${styles.rateBtn} ${homeType === opt.value ? styles.rateBtnActive : ''}`}
+              onClick={() => setHomeType(opt.value)}
+              type="button"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
         <div className={styles.statShelf}>
           <div className={styles.statCell}>

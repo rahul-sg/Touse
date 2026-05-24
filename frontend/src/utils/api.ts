@@ -123,6 +123,7 @@ export interface ScenarioPayload {
   monthly_debt_other?: number
   zip_code?: string
   loan_type?: string
+  home_type?: string  // 'all' | 'single_family' | 'condo'
   cached_max_price?: number
   cached_monthly_payment?: number
   cached_rate_used?: number
@@ -222,18 +223,19 @@ export async function lookupZip(zip: string): Promise<{
   return data
 }
 
-export async function getZipForecast(zip: string): Promise<{
+export async function getZipForecast(zip: string, homeType: string = 'all'): Promise<{
   zip_code: string; city: string | null; state: string | null; metro: string | null
   current_median_value: number; as_of: string
   trend_3m_pct: number | null; trend_6m_pct: number | null; trend_12m_pct: number | null
   direction: string; data_points: number
 }> {
-  const { data } = await api.get(`/api/v1/zip/forecast`, { params: { zip } })
+  const { data } = await api.get(`/api/v1/zip/forecast`, { params: { zip, home_type: homeType } })
   return data
 }
 
 export interface ZipProjection {
   zip_code: string
+  home_type: string
   model_version: string
   trained_at: string
   current_value: number
@@ -242,9 +244,11 @@ export interface ZipProjection {
   forecast_12m: { month: string; price: number; lower: number; upper: number }[]
 }
 
-/** 12-month Prophet price projection for a ZIP (trains on demand — first call is slow). */
-export async function getZipProjection(zip: string): Promise<ZipProjection> {
-  const { data } = await api.get<ZipProjection>('/api/v1/zip/projection', { params: { zip } })
+/** 12-month Prophet projection for a (ZIP, home_type) — trains on demand on first request. */
+export async function getZipProjection(zip: string, homeType: string = 'all'): Promise<ZipProjection> {
+  const { data } = await api.get<ZipProjection>('/api/v1/zip/projection', {
+    params: { zip, home_type: homeType },
+  })
   return data
 }
 

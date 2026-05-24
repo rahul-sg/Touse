@@ -262,7 +262,11 @@ export default function Dashboard() {
                 </Link>
                 {primaryScenario?.zip_code && (
                   <Link
-                    to={`/forecast/${primaryScenario.zip_code}`}
+                    to={`/forecast/${primaryScenario.zip_code}${
+                      primaryScenario.home_type && primaryScenario.home_type !== 'all'
+                        ? `?type=${primaryScenario.home_type}`
+                        : ''
+                    }`}
                     className={styles.actionCard}
                   >
                     <TrendingUp className={styles.actionIcon} size={26} strokeWidth={1.6} />

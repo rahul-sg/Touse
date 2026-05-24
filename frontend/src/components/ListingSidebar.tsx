@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Listing } from '../types'
+import { SlidersHorizontal } from 'lucide-react'
+import type { Listing, PropertyType } from '../types'
 import styles from './ListingSidebar.module.css'
 
 interface Props {
@@ -9,6 +11,12 @@ interface Props {
   onMaxPriceChange: (v: number) => void
   minBeds: number
   onMinBedsChange: (v: number) => void
+  propertyTypes: PropertyType[]
+  onPropertyTypesChange: (v: PropertyType[]) => void
+  minSqft?: number
+  onMinSqftChange: (v: number | undefined) => void
+  minYearBuilt?: number
+  onMinYearBuiltChange: (v: number | undefined) => void
   zipForecastPanel?: ReactNode
   /** Clicking a card asks the map to fly to that listing. */
   onListingClick?: (listing: Listing) => void
@@ -16,8 +24,25 @@ interface Props {
   selectedId?: string | null
 }
 
+const PROPERTY_TYPE_OPTIONS: { value: PropertyType; label: string }[] = [
+  { value: 'single_family', label: 'House' },
+  { value: 'condo',         label: 'Condo' },
+  { value: 'townhouse',     label: 'Townhouse' },
+  { value: 'multi_family',  label: 'Multi-fam' },
+  { value: 'mobile',        label: 'Mobile' },
+  { value: 'land',          label: 'Land' },
+]
+
+const PROPERTY_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  PROPERTY_TYPE_OPTIONS.map(o => [o.value, o.label]),
+)
+
 function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
+function fmtSqft(n: number) {
+  return n.toLocaleString('en-US') + ' sqft'
 }
 
 export default function ListingSidebar({
@@ -27,10 +52,27 @@ export default function ListingSidebar({
   onMaxPriceChange,
   minBeds,
   onMinBedsChange,
+  propertyTypes,
+  onPropertyTypesChange,
+  minSqft,
+  onMinSqftChange,
+  minYearBuilt,
+  onMinYearBuiltChange,
   zipForecastPanel,
   onListingClick,
   selectedId,
 }: Props) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
+  function toggleType(t: PropertyType) {
+    const next = propertyTypes.includes(t)
+      ? propertyTypes.filter(x => x !== t)
+      : [...propertyTypes, t]
+    onPropertyTypesChange(next)
+  }
+
+  const activeAdvancedCount = (minSqft ? 1 : 0) + (minYearBuilt ? 1 : 0)
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.filters}>
@@ -70,6 +112,64 @@ export default function ListingSidebar({
             ))}
           </div>
         </div>
+
+        <div className={styles.filterRow}>
+          <label className={styles.filterLabel}>Property Type</label>
+          <div className={styles.chipRow}>
+            {PROPERTY_TYPE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                className={`${styles.chip} ${propertyTypes.includes(opt.value) ? styles.chipActive : ''}`}
+                onClick={() => toggleType(opt.value)}
+                type="button"
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className={styles.advancedToggle}
+          onClick={() => setAdvancedOpen(o => !o)}
+        >
+          <SlidersHorizontal size={14} strokeWidth={1.8} />
+          More filters
+          {activeAdvancedCount > 0 && (
+            <span className={styles.advancedBadge}>{activeAdvancedCount}</span>
+          )}
+        </button>
+
+        {advancedOpen && (
+          <div className={styles.advancedPanel}>
+            <div className={styles.filterRow}>
+              <label className={styles.filterLabel}>Min Sqft</label>
+              <input
+                type="number"
+                min={0}
+                step={100}
+                className={styles.numberInput}
+                placeholder="any"
+                value={minSqft ?? ''}
+                onChange={(e) => onMinSqftChange(e.target.value ? Number(e.target.value) : undefined)}
+              />
+            </div>
+            <div className={styles.filterRow}>
+              <label className={styles.filterLabel}>Built After</label>
+              <input
+                type="number"
+                min={1800}
+                max={2100}
+                step={1}
+                className={styles.numberInput}
+                placeholder="any year"
+                value={minYearBuilt ?? ''}
+                onChange={(e) => onMinYearBuiltChange(e.target.value ? Number(e.target.value) : undefined)}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {zipForecastPanel && (
@@ -87,7 +187,7 @@ export default function ListingSidebar({
         {!isLoading && listings.length === 0 && (
           <div className={styles.state}>
             <p>No listings found in this area for your budget.</p>
-            <p className={styles.hint}>Try zooming out or increasing your max price.</p>
+            <p className={styles.hint}>Try zooming out, raising max price, or relaxing the filters.</p>
           </div>
         )}
 
@@ -102,9 +202,18 @@ export default function ListingSidebar({
               : <div className={styles.cardPhotoPlaceholder}>No photo</div>
             }
             <div className={styles.cardBody}>
-              <span className={styles.cardPrice}>{fmt(l.price)}</span>
+              <div className={styles.cardPriceRow}>
+                <span className={styles.cardPrice}>{fmt(l.price)}</span>
+                {l.property_type && (
+                  <span className={styles.cardTypeBadge}>
+                    {PROPERTY_TYPE_LABEL[String(l.property_type)] ?? String(l.property_type)}
+                  </span>
+                )}
+              </div>
               <p className={styles.cardMeta}>
                 {l.beds ?? '—'} bd &nbsp;·&nbsp; {l.baths ?? '—'} ba
+                {l.sqft && <> &nbsp;·&nbsp; {fmtSqft(l.sqft)}</>}
+                {l.year_built && <> &nbsp;·&nbsp; built {l.year_built}</>}
               </p>
               <p className={styles.cardAddress}>{l.address}</p>
               {l.listing_url && l.listing_url !== '#' && (

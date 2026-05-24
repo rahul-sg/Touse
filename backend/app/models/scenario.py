@@ -35,6 +35,8 @@ class Scenario(Base):
     monthly_debt_other: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     loan_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default="conventional")
+    # Type-aware forecasting: 'all' | 'single_family' | 'condo'
+    home_type: Mapped[str] = mapped_column(String(20), nullable=False, default="all", server_default="all")
     # Cached affordability result
     cached_max_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     cached_monthly_payment: Mapped[float | None] = mapped_column(Float, nullable=True)

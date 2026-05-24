@@ -24,3 +24,4 @@ class MetroSupplyHistory(Base):
     mean_doz_pending: Mapped[float | None] = mapped_column(Float)    # mean days on market before pending
     perc_price_cut: Mapped[float | None] = mapped_column(Float)      # % listings with a price cut
     median_list_price: Mapped[float | None] = mapped_column(Float)   # median list price
+    median_rent: Mapped[float | None] = mapped_column(Float)         # Zillow ZORI median asking rent

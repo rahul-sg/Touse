@@ -24,6 +24,7 @@ class ScenarioCreate(BaseModel):
     monthly_debt_other: float = 0
     zip_code: str | None = None
     loan_type: str | None = "conventional"
+    home_type: str = "all"  # 'all' | 'single_family' | 'condo'
     cached_max_price: float | None = None
     cached_monthly_payment: float | None = None
     cached_rate_used: float | None = None
@@ -42,6 +43,7 @@ class ScenarioUpdate(BaseModel):
     monthly_debt_other: float | None = None
     zip_code: str | None = None
     loan_type: str | None = None
+    home_type: str | None = None
     cached_max_price: float | None = None
     cached_monthly_payment: float | None = None
     cached_rate_used: float | None = None
@@ -63,6 +65,7 @@ def _serialize(s: Scenario) -> dict:
         "monthly_debt_other": s.monthly_debt_other or 0,
         "zip_code": s.zip_code,
         "loan_type": s.loan_type or "conventional",
+        "home_type": s.home_type or "all",
         "cached_max_price": s.cached_max_price,
         "cached_monthly_payment": s.cached_monthly_payment,
         "cached_rate_used": s.cached_rate_used,
@@ -109,6 +112,7 @@ async def create_scenario(
         monthly_debt_other=body.monthly_debt_other,
         zip_code=body.zip_code,
         loan_type=body.loan_type or "conventional",
+        home_type=body.home_type or "all",
         cached_max_price=body.cached_max_price,
         cached_monthly_payment=body.cached_monthly_payment,
         cached_rate_used=body.cached_rate_used,

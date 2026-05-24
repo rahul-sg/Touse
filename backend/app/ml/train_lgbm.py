@@ -40,7 +40,11 @@ from app.ml.backtest import DEFAULT_MIN_TRAIN, DEFAULT_FOLDS  # match Prophet ba
 from app.models.zip_lgbm_prediction import ZipLgbmPrediction
 from etl.zillow_metro import normalize_metro  # noqa: E402 — keep DB models above
 
-MODEL_VERSION = "lgbm_panel_v2_supply"
+MODEL_VERSION = "lgbm_panel_v4_typed"
+
+# Rows must have the target and the longest core price lag; everything else
+# (macros, sentiment, supply) can be NaN — LightGBM treats missing as a signal.
+REQUIRED_FOR_FIT = ["target", "price_lag_12m"]
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -55,22 +59,27 @@ SAMPLE_DEFAULT = 30          # same sample size as Prophet baseline
 # ── Feature engineering ───────────────────────────────────────────────────────
 
 def _load_prices(engine) -> pd.DataFrame:
-    """All monthly ZIP prices + metro, sorted by (zip, date)."""
+    """All monthly ZIP prices per (zip, home_type), sorted by (zip, home_type, date).
+
+    Per-(zip,home_type) ordering matters — the lag features are computed within
+    each (zip, home_type) group, so a condo's history must not leak into a SFR
+    lag for the same ZIP.
+    """
     df = pd.read_sql(
-        "SELECT zip_code, date, median_value, metro FROM zip_price_history "
-        "WHERE median_value IS NOT NULL",
+        "SELECT zip_code, home_type, date, median_value, metro "
+        "FROM zip_price_history WHERE median_value IS NOT NULL",
         engine,
     )
     df["date"] = pd.to_datetime(df["date"])
     df["metro_norm"] = df["metro"].fillna("").map(normalize_metro)
-    return df.sort_values(["zip_code", "date"]).reset_index(drop=True)
+    return df.sort_values(["zip_code", "home_type", "date"]).reset_index(drop=True)
 
 
 def _load_metro_supply(engine) -> pd.DataFrame:
-    """Zillow metro supply panel with within-metro YoY derivations."""
+    """Zillow metro supply + rent panel with within-metro YoY derivations."""
     df = pd.read_sql(
         "SELECT metro, date, invt_fs, new_listings, mean_doz_pending, "
-        "perc_price_cut, median_list_price FROM metro_supply_history",
+        "perc_price_cut, median_list_price, median_rent FROM metro_supply_history",
         engine,
     )
     df["date"] = pd.to_datetime(df["date"])
@@ -78,6 +87,7 @@ def _load_metro_supply(engine) -> pd.DataFrame:
     g = df.groupby("metro", sort=False)
     df["invt_fs_yoy"] = df["invt_fs"] / g["invt_fs"].shift(12) - 1
     df["new_listings_yoy"] = df["new_listings"] / g["new_listings"].shift(12) - 1
+    df["rent_yoy"] = df["median_rent"] / g["median_rent"].shift(12) - 1
     return df.rename(columns={"metro": "metro_norm"})
 
 
@@ -99,25 +109,30 @@ def _load_macro(engine) -> pd.DataFrame:
     wide["mortgage_rate_lag_3m"] = wide["mortgage_rate_30y"].shift(3)
     wide["mortgage_rate_lag_12m"] = wide["mortgage_rate_30y"].shift(12)
     wide["mortgage_rate_change_3m"] = wide["mortgage_rate_30y"] - wide["mortgage_rate_lag_3m"]
+    # Step E: Fed-funds level + deltas — captures monetary-regime shifts that
+    # the absolute rate alone hides (a rising rate environment is different
+    # from a stable one at the same level).
+    wide["fed_funds_change_3m"] = wide["fed_funds_rate"] - wide["fed_funds_rate"].shift(3)
+    wide["fed_funds_change_12m"] = wide["fed_funds_rate"] - wide["fed_funds_rate"].shift(12)
     return wide
 
 
 def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
-    """Build the full (zip, month) feature panel + return the feature column list."""
+    """Build the full (zip, home_type, month) feature panel + feature column list."""
     prices = _load_prices(engine)
-    g = prices.groupby("zip_code", sort=False)["median_value"]
+    # Lag/growth features computed WITHIN each (zip, home_type) — must not let
+    # a condo's history leak into a SFR lag for the same ZIP.
+    g = prices.groupby(["zip_code", "home_type"], sort=False)["median_value"]
 
-    # Lagged prices and growth rates
     for lag in (1, 3, 6, 12, 24):
         prices[f"price_lag_{lag}m"] = g.shift(lag)
     for lag in (1, 3, 6, 12):
         prices[f"growth_{lag}m"] = prices["median_value"] / prices[f"price_lag_{lag}m"] - 1
-    # Rolling means of monthly growth
-    g1 = prices.groupby("zip_code", sort=False)["growth_1m"]
+    g1 = prices.groupby(["zip_code", "home_type"], sort=False)["growth_1m"]
     prices["growth_3m_avg"] = g1.transform(lambda s: s.rolling(3).mean())
     prices["growth_12m_avg"] = g1.transform(lambda s: s.rolling(12).mean())
 
-    # Target — price 12 months ahead, then % growth
+    # Target — price 12 months ahead in the same (zip, home_type) series
     prices["price_future"] = g.shift(-HORIZON_MONTHS)
     prices["target"] = prices["price_future"] / prices["median_value"] - 1
 
@@ -133,7 +148,7 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
         macro.sort_values("macro_date"),
         left_on="date", right_on="macro_date",
         direction="backward",
-    ).sort_values(["zip_code", "date"]).reset_index(drop=True)
+    ).sort_values(["zip_code", "home_type", "date"]).reset_index(drop=True)
 
     # Metro supply join — same month, by normalized metro name. Same-month is
     # OK (not leakage): supply at month t and price-growth from t→t+12 are
@@ -141,19 +156,32 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
     supply = _load_metro_supply(engine)
     prices = prices.merge(supply, on=["metro_norm", "date"], how="left")
 
+    # Step D: rent-to-price ratio — classic valuation signal. Annualized rent ÷ price.
+    # High ratio = buying is cheap vs renting (supports prices); low ratio = stretched.
+    prices["rent_to_price_ratio"] = (12 * prices["median_rent"]) / prices["median_value"]
+
+    # Step E: election year flag — Presidential + midterm cycles.
+    prices["is_election_year"] = (prices["date"].dt.year % 2 == 0).astype(int)
+
     feature_cols = [
         "price_lag_1m", "price_lag_3m", "price_lag_6m", "price_lag_12m", "price_lag_24m",
         "growth_1m", "growth_3m", "growth_6m", "growth_12m",
         "growth_3m_avg", "growth_12m_avg",
         "mortgage_rate_30y", "mortgage_rate_lag_3m", "mortgage_rate_lag_12m",
         "mortgage_rate_change_3m",
-        "cpi_yoy", "unemployment", "fed_funds_rate", "housing_starts",
-        "consumer_sentiment", "new_home_sales",
-        # Metro supply / demand signals (Zillow Research)
+        "cpi_yoy", "unemployment", "fed_funds_rate",
+        "fed_funds_change_3m", "fed_funds_change_12m",   # Step E
+        "housing_starts", "consumer_sentiment", "new_home_sales",
+        # Metro supply / demand (Zillow Research)
         "invt_fs", "new_listings", "mean_doz_pending", "perc_price_cut",
         "invt_fs_yoy", "new_listings_yoy",
+        # Step D: rent
+        "median_rent", "rent_yoy", "rent_to_price_ratio",
+        # Step E: election cycle
+        "is_election_year",
         "month_sin", "month_cos",
-        "zip_code",  # categorical
+        "zip_code",   # categorical
+        "home_type",  # categorical — lets the model learn SFR vs condo dynamics
     ]
     return prices, feature_cols
 
@@ -161,9 +189,14 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
 # ── Sampling — match Prophet baseline ─────────────────────────────────────────
 
 def _pick_eval_zips(panel: pd.DataFrame, n: int, seed: int) -> list[str]:
-    """Same protocol as the Prophet backtest: ZIPs with enough history."""
+    """Same protocol as the Prophet backtest: ZIPs with enough history.
+
+    Uses the 'all' home_type so the metric is apples-to-apples with prior
+    backtests (Prophet baseline operated on the combined index).
+    """
     need = DEFAULT_MIN_TRAIN + HORIZON_MONTHS + EVAL_FOLDS
-    counts = panel.groupby("zip_code").size()
+    all_only = panel[panel["home_type"] == "all"]
+    counts = all_only.groupby("zip_code").size()
     eligible = counts[counts >= need].index.tolist()
     random.seed(seed)
     return random.sample(eligible, min(n, len(eligible)))
@@ -192,9 +225,10 @@ def build_and_train() -> tuple[lgb.LGBMRegressor, pd.DataFrame, list[str], pd.Ti
     # No-leak rule: training targets must end strictly before the eval window starts.
     train_max_month = earliest_cutoff - pd.DateOffset(months=HORIZON_MONTHS)
     train_mask = (panel["date"] <= train_max_month) & panel["target"].notna()
-    train_df = panel[train_mask].dropna(subset=feature_cols + ["target"]).copy()
+    train_df = panel[train_mask].dropna(subset=REQUIRED_FOR_FIT).copy()
     train_df["zip_code"] = train_df["zip_code"].astype("category")
-    print(f"  train rows: {len(train_df):,} (all ZIPs, months ≤ {train_max_month.date()})")
+    train_df["home_type"] = train_df["home_type"].astype("category")
+    print(f"  train rows: {len(train_df):,} (all ZIPs × home_types, months ≤ {train_max_month.date()})")
 
     X_train, y_train = train_df[feature_cols], train_df["target"]
 
@@ -209,11 +243,12 @@ def build_and_train() -> tuple[lgb.LGBMRegressor, pd.DataFrame, list[str], pd.Ti
         n_jobs=-1,
         verbose=-1,
     )
-    model.fit(X_train, y_train, categorical_feature=["zip_code"])
+    model.fit(X_train, y_train, categorical_feature=["zip_code", "home_type"])
     print(f"  trained in {time.time()-t1:.1f}s")
 
     # Keep the trained categories for consistent eval encoding.
     model._zip_categories = train_df["zip_code"].cat.categories
+    model._home_type_categories = train_df["home_type"].cat.categories
     return model, panel, feature_cols, earliest_cutoff, latest_cutoff
 
 
@@ -234,7 +269,7 @@ def evaluate_sample(
         & (panel["date"] <= latest_cutoff)
         & panel["target"].notna()
     )
-    eval_df = panel[eval_mask].dropna(subset=feature_cols + ["target"]).copy()
+    eval_df = panel[eval_mask].dropna(subset=REQUIRED_FOR_FIT).copy()
     eval_df["zip_code"] = pd.Categorical(eval_df["zip_code"], categories=model._zip_categories)
 
     X_eval = eval_df[feature_cols]
@@ -309,7 +344,7 @@ def train_and_save_predictions(engine=None) -> int:
     print(f"  panel: {len(panel):,} rows in {time.time()-t0:.1f}s")
 
     # Train on every row that has a known 12-month target.
-    train_df = panel[panel["target"].notna()].dropna(subset=feature_cols + ["target"]).copy()
+    train_df = panel[panel["target"].notna()].dropna(subset=REQUIRED_FOR_FIT).copy()
     train_df["zip_code"] = train_df["zip_code"].astype("category")
     print(f"  train rows: {len(train_df):,}")
 

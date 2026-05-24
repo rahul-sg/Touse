@@ -40,6 +40,7 @@ SOURCES = {
     "mean_doz_pending":   "mean_doz_pending/Metro_mean_doz_pending_uc_sfrcondo_sm_month.csv",
     "perc_price_cut":     "perc_listings_price_cut/Metro_perc_listings_price_cut_uc_sfrcondo_sm_month.csv",
     "median_list_price":  "mlp/Metro_mlp_uc_sfrcondo_sm_month.csv",
+    "median_rent":        "zori/Metro_zori_uc_sfrcondomfr_sm_month.csv",
 }
 _DATE_COL = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -94,7 +95,7 @@ def run() -> None:
     session = get_session()
     try:
         cols_to_update = ("invt_fs", "new_listings", "mean_doz_pending",
-                          "perc_price_cut", "median_list_price")
+                          "perc_price_cut", "median_list_price", "median_rent")
         # Chunked upsert — keeps the statement size sane.
         for i in range(0, len(rows), 2000):
             chunk = rows[i:i + 2000]
