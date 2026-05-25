@@ -89,6 +89,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
               id="first_name"
               type="text"
               placeholder="Jane"
+              autoComplete="given-name"
               {...register('first_name', { required: 'Required' })}
             />
             {errors.first_name && <p className={styles.error}>{errors.first_name.message}</p>}
@@ -99,6 +100,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
               id="last_name"
               type="text"
               placeholder="Smith"
+              autoComplete="family-name"
               {...register('last_name', { required: 'Required' })}
             />
             {errors.last_name && <p className={styles.error}>{errors.last_name.message}</p>}
@@ -111,6 +113,9 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
             id="email"
             type="email"
             placeholder="jane@example.com"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
             {...register('email', {
               required: 'Required',
               pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address' },
@@ -125,6 +130,9 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
             id="username"
             type="text"
             placeholder="janesmith"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             {...register('username', {
               required: 'Required',
               minLength: { value: 3, message: 'At least 3 characters' },
@@ -143,6 +151,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
             id="target_zip"
             type="text"
             placeholder="78701 or Austin, TX"
+            autoComplete="postal-code"
             {...register('target_zip')}
           />
           <p className={styles.fieldHint}>We use this to personalise your map and market forecast.</p>
@@ -154,6 +163,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
             id="password"
             type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             {...register('password', {
               required: 'Required',
               minLength: { value: 8, message: 'At least 8 characters' },
@@ -168,6 +178,7 @@ function Step1({ onSuccess }: { onSuccess: (userId: number) => void }) {
             id="confirm_password"
             type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             {...register('confirm_password', {
               required: 'Required',
               validate: (val) => val === password || 'Passwords do not match',
@@ -443,8 +454,10 @@ function Step2({ userId, onSuccess }: { userId: number; onSuccess: () => void })
           <input
             id="zip_code"
             type="text"
+            inputMode="numeric"
             placeholder="78701"
             maxLength={10}
+            autoComplete="postal-code"
             {...register('zip_code', { required: 'Required' })}
           />
           {errors.zip_code && <p className={styles.error}>Required</p>}

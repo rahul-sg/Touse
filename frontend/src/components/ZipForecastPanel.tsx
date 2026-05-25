@@ -53,8 +53,7 @@ export default function ZipForecastPanel({ zip }: Props) {
   if (missing || !data) {
     return (
       <div className={styles.missing}>
-        No price history for {zip} yet.{' '}
-        <span className={styles.missingHint}>Run the Zillow ZIP ETL to populate data.</span>
+        No price data available for ZIP {zip} yet.
       </div>
     )
   }

@@ -31,12 +31,23 @@ function fmtMonth(m: string) {
   })
 }
 
+// Recharts passes tooltip props with a loose shape; this is the slim subset we need.
+interface TooltipPayloadItem {
+  dataKey: string
+  value: number
+}
+interface ChartTooltipProps {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  label?: string
+}
+
 // Custom tooltip
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  const price = payload.find((p: any) => p.dataKey === 'price')?.value
-  const lower = payload.find((p: any) => p.dataKey === 'lower')?.value
-  const upper = payload.find((p: any) => p.dataKey === 'upper')?.value
+function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
+  if (!active || !payload?.length || !label) return null
+  const price = payload.find((p) => p.dataKey === 'price')?.value
+  const lower = payload.find((p) => p.dataKey === 'lower')?.value
+  const upper = payload.find((p) => p.dataKey === 'upper')?.value
   return (
     <div className={styles.tooltip}>
       <p className={styles.tooltipMonth}>{fmtMonth(label)}</p>

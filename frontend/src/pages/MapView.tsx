@@ -77,7 +77,6 @@ export default function MapView() {
       .finally(() => {
         setZipLookupPending(false)
       })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialZip])
 
   // Clean up debounce on unmount

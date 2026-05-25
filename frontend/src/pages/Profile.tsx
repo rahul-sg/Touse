@@ -94,16 +94,22 @@ export default function Profile() {
             <div className={styles.row}>
               <div className={styles.field}>
                 <label>First name</label>
-                <input {...account.register('first_name', { required: true })} />
+                <input autoComplete="given-name" {...account.register('first_name', { required: true })} />
               </div>
               <div className={styles.field}>
                 <label>Last name</label>
-                <input {...account.register('last_name', { required: true })} />
+                <input autoComplete="family-name" {...account.register('last_name', { required: true })} />
               </div>
             </div>
             <div className={styles.field}>
               <label>Email</label>
-              <input type="email" {...account.register('email', { required: true })} />
+              <input
+                type="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                {...account.register('email', { required: true })}
+              />
             </div>
             <div className={styles.field}>
               <label>Username</label>
@@ -131,6 +137,7 @@ export default function Profile() {
               <label>Current password</label>
               <input
                 type="password"
+                autoComplete="current-password"
                 placeholder="••••••••"
                 {...password.register('current_password', { required: true })}
               />
@@ -139,6 +146,7 @@ export default function Profile() {
               <label>New password</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 placeholder="At least 8 characters"
                 {...password.register('new_password', { required: true, minLength: 8 })}
               />
@@ -147,6 +155,7 @@ export default function Profile() {
               <label>Confirm new password</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 placeholder="••••••••"
                 {...password.register('confirm_password', { required: true })}
               />

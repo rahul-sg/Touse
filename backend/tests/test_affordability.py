@@ -1,8 +1,7 @@
-import pytest
-from app.services.affordability import (
+from app.services.affordability import _credit_score_premium
+from app.services.loan_calculators import (
     _monthly_payment,
     _max_loan_from_payment,
-    _credit_score_premium,
 )
 
 

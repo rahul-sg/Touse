@@ -198,7 +198,6 @@ Metro-level forecasting from the original design was retired in favour of the ZI
 | `/profile` | Manage account details and password |
 | `/map` | Interactive listings map |
 | `/forecast/:zip` | ZIP price forecast + market context (with `?type=single_family\|condo`) |
-| `/scenarios` | All saved scenarios |
 | `/scenarios/:publicId` | Scenario detail |
 | `/about` | Methodology, data sources, contact form |
 

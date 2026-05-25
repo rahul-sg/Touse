@@ -43,11 +43,18 @@ export default function ContactForm() {
       <div className={styles.row}>
         <div className={styles.field}>
           <label>Name</label>
-          <input {...register('name', { required: true })} placeholder="Your name" />
+          <input autoComplete="name" {...register('name', { required: true })} placeholder="Your name" />
         </div>
         <div className={styles.field}>
           <label>Email</label>
-          <input type="email" {...register('email', { required: true })} placeholder="you@example.com" />
+          <input
+            type="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            {...register('email', { required: true })}
+            placeholder="you@example.com"
+          />
         </div>
       </div>
       <div className={styles.field}>

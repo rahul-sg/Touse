@@ -92,6 +92,6 @@ async def nearest_region(
         result = await db.execute(select(Region).limit(1))
         region = result.scalar_one_or_none()
     if not region:
-        raise HTTPException(status_code=404, detail="No regions loaded yet — run ETL first")
+        raise HTTPException(status_code=404, detail="No matching region found.")
 
     return {"metro_id": region.metro_id, "name": region.name, "state": region.state}

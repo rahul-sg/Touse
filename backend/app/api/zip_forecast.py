@@ -87,7 +87,7 @@ async def nearest_zip(
     if not candidates:
         candidates = await _candidates(1.5)
     if not candidates:
-        raise HTTPException(status_code=404, detail="No ZIP centroids loaded — run ETL first")
+        raise HTTPException(status_code=404, detail="No ZIP found near these coordinates.")
 
     best = min(candidates, key=lambda c: _haversine_km(lat, lng, c.lat, c.lng))
     return {
@@ -123,14 +123,28 @@ async def zip_forecast(
     rows = result.scalars().all()
 
     if not rows:
+        # Differentiate "this home type has no series here" from "no data at all".
+        # If 'all' has data but the requested home_type doesn't, Zillow simply
+        # doesn't publish a separate series for that type in this ZIP.
+        if home_type != "all":
+            any_data = await db.scalar(
+                select(ZipPriceHistory.id)
+                .where(ZipPriceHistory.zip_code == zip_clean)
+                .limit(1)
+            )
+            if any_data:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Zillow doesn't publish a separate {home_type.replace('_', ' ')} price series for ZIP {zip}. Try All homes.",
+                )
         raise HTTPException(
             status_code=404,
-            detail=f"No price history for ZIP {zip} — run ETL (etl.zillow_zip) first",
+            detail=f"No price history available for ZIP {zip}.",
         )
 
     prices = [(r.date, r.median_value) for r in rows if r.median_value]
     if len(prices) < 4:
-        raise HTTPException(status_code=404, detail="Insufficient price history for this ZIP")
+        raise HTTPException(status_code=404, detail=f"Not enough price history for ZIP {zip} to compute trends.")
 
     latest_date, latest_price = prices[-1]
     city = rows[-1].city

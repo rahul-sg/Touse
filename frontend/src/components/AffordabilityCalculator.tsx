@@ -28,7 +28,7 @@ export default function AffordabilityCalculator() {
 
         {isError && (
           <div className={styles.errorBox}>
-            Something went wrong. Check that the backend is running and try again.
+            Couldn't calculate your range right now. Please try again in a moment.
           </div>
         )}
 

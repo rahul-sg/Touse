@@ -64,6 +64,8 @@ export default function Login() {
               type="text"
               placeholder="jane@example.com or janesmith"
               autoCapitalize="none"
+              autoComplete="username"
+              spellCheck={false}
               {...register('identifier', { required: 'Required' })}
             />
             {errors.identifier && <p className={styles.error}>{errors.identifier.message}</p>}
@@ -75,6 +77,7 @@ export default function Login() {
               id="password"
               type="password"
               placeholder="••••••••"
+              autoComplete="current-password"
               {...register('password', { required: 'Required' })}
             />
             {errors.password && <p className={styles.error}>{errors.password.message}</p>}

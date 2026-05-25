@@ -114,7 +114,18 @@ export default function Forecast() {
 
     getZipForecast(zip, homeType)
       .then(setTrends)
-      .catch(() => setError(`No ${homeType === 'all' ? '' : homeType.replace('_', ' ') + ' '}price history yet for this ZIP.`))
+      .catch((err: unknown) => {
+        // Prefer the backend's specific message (e.g. "Zillow doesn't publish
+        // a separate condo series for ZIP 59001 — try All homes"). It gives
+        // the user a clear next action vs. a generic empty state.
+        let msg = `No ${homeType === 'all' ? '' : homeType.replace('_', ' ') + ' '}price history yet for this ZIP.`
+        if (err && typeof err === 'object' && 'response' in err) {
+          const detail = (err as { response?: { data?: { detail?: string } } })
+            .response?.data?.detail
+          if (typeof detail === 'string' && detail) msg = detail
+        }
+        setError(msg)
+      })
       .finally(() => setTrendsLoading(false))
 
     // The projection trains a Prophet model on first request per (ZIP, home_type).
