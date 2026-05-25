@@ -90,7 +90,7 @@ export default function About() {
         <ul className={styles.list}>
           <li>Forecasts beyond 12 months are unreliable — we don't show them.</li>
           <li>The forecast model uses macro features but cannot predict interest-rate surprises or policy shocks — use the rate-scenario overlay to stress-test sensitivity.</li>
-          <li>The condo and single-family forecasts cover ZIPs with sufficient history for that type; in ZIPs where Zillow doesn't publish a separate series, the all-homes index is used.</li>
+          <li>Condo and single-family forecasts are only available in ZIPs where Zillow publishes a separate series for that type; elsewhere, switch to "All homes" to see a forecast.</li>
           <li>Listing data is cached and may be up to 6 hours stale.</li>
           <li>Listing map pins are approximate — when an address can't be geocoded precisely we place it near the ZIP center.</li>
           <li>Loan eligibility rules (e.g. VA service requirements, USDA rural limits) are not verified — always confirm with a lender.</li>

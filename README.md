@@ -20,53 +20,122 @@ A USA housing tool that shows you **what you can afford, where you can afford it
 
 ## Architecture
 
+Touse is a small monolith split into four cooperating processes — a Vite SPA, a FastAPI backend, a Celery worker, and a Celery Beat scheduler — backed by PostgreSQL and Redis. Market data is collected by Celery on a public-source cadence, written to Postgres, and served read-mostly by FastAPI. The forecast pipeline is two-stage: a global LightGBM panel sets each ZIP × home-type's 12-month endpoint offline, and a per-`(zip, home_type)` Prophet model shapes the monthly path on demand.
+
 ```mermaid
 flowchart TB
-    UI["Browser — React + Vite SPA<br/>(JWT in localStorage)"]
+    UI["Browser — React + Vite SPA<br/>(JWT in localStorage · TanStack Query cache)"]
 
     subgraph api[FastAPI backend]
-        ROUTES["Routes — Auth · Profile · Affordability<br/>Readiness · Listings · ZIP forecast · Compare · Contact"]
-        PROPHET["ZIP projection service<br/>Prophet path + LightGBM endpoint anchor<br/>(trained on demand, cached per zip×home_type)"]
+        direction TB
+        AUTH["Auth + profile<br/>(JWT mint · ownership checks)"]
+        AFFORD["Affordability + readiness<br/>(28/36 rule · 6 loan types · DTI scoring)"]
+        FORECAST["ZIP forecast API<br/>/lookup · /forecast · /projection · /market-context"]
+        LISTINGS["Listings API<br/>(RapidAPI proxy → cache → geocoder)"]
+        PROJ["zip_projection service<br/>Prophet path + LightGBM endpoint anchor<br/>(trained on demand · cached per zip × home_type)"]
     end
 
     subgraph jobs[Celery]
+        direction TB
         BEAT["Beat — cron scheduler"]
-        WORKER["Worker — ETL + forecast retraining"]
+        ETLW["Worker — ETL tasks<br/>(Zillow ZHVI · Zillow metro · FRED · Freddie · BEA)"]
+        MLW["Worker — ML tasks<br/>(train_global_lgbm · refresh_zip_forecasts)"]
     end
 
-    DB[("PostgreSQL")]
-    REDIS[("Redis — Celery broker<br/>+ rate-limit store")]
+    DB[("PostgreSQL<br/>15.8M price rows · macro · listings · users")]
+    REDIS[("Redis<br/>Celery broker + result backend<br/>(optional rate-limit store)")]
 
     subgraph ext[External services]
+        ZILLOW["Zillow Research<br/>(ZHVI CSVs · metro supply)"]
+        FRED["FRED · Freddie Mac · BEA"]
         RAPID["RapidAPI realty-us"]
         CENSUS["US Census geocoder"]
-        RESEND["Resend (email)"]
-        FEEDS["Zillow · Freddie Mac · FRED · BEA"]
+        RESEND["Resend (transactional email)"]
     end
 
-    UI -->|"REST + Bearer JWT"| ROUTES
-    ROUTES --> PROPHET
-    ROUTES <--> DB
-    PROPHET --> DB
-    ROUTES -. rate limiting .-> REDIS
-    ROUTES -->|listings| RAPID
-    ROUTES -->|geocode| CENSUS
-    ROUTES -->|verification email| RESEND
+    UI -->|"REST + Bearer JWT"| AUTH
+    UI --> AFFORD
+    UI --> FORECAST
+    UI --> LISTINGS
 
-    BEAT -->|enqueue jobs| REDIS
-    REDIS -->|dispatch| WORKER
-    WORKER -->|fetch market data| FEEDS
-    WORKER -->|prices · rates · forecasts| DB
+    AUTH <--> DB
+    AFFORD <--> DB
+    FORECAST --> PROJ
+    PROJ <--> DB
+    LISTINGS <--> DB
+    LISTINGS -->|cache miss| RAPID
+    LISTINGS -->|geocode| CENSUS
+    AUTH -->|verification| RESEND
+    api -. slowapi rate limit .-> REDIS
+
+    BEAT --> REDIS
+    REDIS --> ETLW
+    REDIS --> MLW
+    ETLW --> ZILLOW
+    ETLW --> FRED
+    ETLW --> DB
+    MLW <--> DB
 ```
 
-**How the data flows**
+### Request lifecycle — the headline path
 
-- **ETL scripts** run offline and populate PostgreSQL. They are the only writers of market data.
-- The **FastAPI backend** is read-mostly: it serves computed results (affordability, readiness, forecasts) and proxies live listings.
-- **Forecasts** are trained on demand per `(zip, home_type)` — the first request fits a Prophet model (~1–2s, off the event loop) anchored to the latest LightGBM endpoint prediction from `zip_lgbm_predictions`, and caches the result in `zip_forecast_results`; later requests are instant. The global LightGBM panel is retrained monthly by Celery.
-- **Listings** are fetched from RapidAPI on a cache miss, geocoded to real coordinates via the US Census geocoder, and cached for 6 hours.
-- Every user-data endpoint requires a **JWT** and verifies ownership — a user can only read/write their own profile and scenarios.
-- **Rate limiting** is per-IP (slowapi) — in-memory by default, switchable to Redis via `RATELIMIT_STORAGE_URI` so the limit holds across multiple backend instances behind a load balancer.
+A logged-in user opening their dashboard fans out into three independent reads, all carrying the JWT:
+
+1. **`GET /scenarios/user/{id}`** → `scenarios` table → the SPA renders the primary scenario card.
+2. **`POST /readiness`** with the primary scenario → `readiness_service` blends affordability math + DTI + market fit → 0–100 score and action plan.
+3. **`GET /api/v1/zip/projection?zip=...&home_type=...`** → `zip_projection.get_or_train()`:
+   - Hits `zip_forecast_results` for a cached projection. If found, returned immediately.
+   - On miss, pulls all monthly history for `(zip, home_type)` from `zip_price_history`, looks up the LightGBM 12-month endpoint anchor in `zip_lgbm_predictions`, fits Prophet (~1–2 s) anchored to that endpoint, caches the result, returns it.
+
+TanStack Query keeps everything cached client-side; revisits are instant.
+
+### Forecast pipeline (two-stage, offline + on-demand)
+
+```
+                 ┌─────────────────── offline (monthly, Celery) ──────────────────┐
+                 │                                                                │
+ZHVI CSVs ─┐     │   build_panel()                                                │
+metro CSVs ┼──→ Postgres ──→  zip × home_type × month                             │
+FRED feed ─┘                  + lagged prices + growth rates                      │
+                              + US macro + metro supply + rent + election cycle   │
+                              → LightGBM panel (n_estimators=250, subsample=0.7,  │
+                                 zip_code + home_type as categoricals)            │
+                                            ↓                                     │
+                              zip_lgbm_predictions ← endpoint anchor per (z, ht)  │
+                 │                                                                │
+                 └────────────────────────────────────────────────────────────────┘
+                                            ↓
+                            on demand (first request per z × ht)
+                                            ↓
+                  Prophet(yearly_seasonality=True) on (z, ht) history
+                              ↓
+                  blend toward LightGBM endpoint + long-run CAGR
+                              ↓
+                  zip_forecast_results ←  12 monthly points + 80% band
+```
+
+Cached forecasts live in Postgres so a restart loses nothing. Celery refreshes the cache the day after the LightGBM panel retrains, so served forecasts always reflect the newest macro snapshot.
+
+### Refresh cadence (Celery Beat)
+
+All times UTC. Cadence matches each source's actual publication schedule (see `backend/tasks/celery_app.py`).
+
+| When | Task | Why |
+|------|------|-----|
+| Friday 09:00 | `run_freddie_mac_etl` | PMMS publishes every Thursday |
+| Monday 02:00 | `run_fred_etl` | Weekly pass picks up monthly + back-revisions |
+| 15th 03:00 | `run_zillow_zip_etl` | Zillow ZHVI publishes mid-month (3 home types) |
+| 15th 03:30 | `run_zillow_metro_etl` | Metro supply panel publishes alongside |
+| Quarterly | `run_bea_etl` | State GDP is annual; quarterly pass is plenty |
+| 16th 02:00 | `train_global_lgbm` | Day after fresh Zillow data — retrain the panel |
+| 16th 04:00 | `refresh_zip_forecasts` | Re-fit Prophet caches against new anchors |
+
+### Trust boundaries
+
+- **ETL workers are the only writers of market data.** API routes never write `zip_price_history`, `macro_indicators`, etc. — this keeps the read path simple and prevents user input from corrupting market state.
+- **Every user-data endpoint requires a JWT and verifies ownership.** A user can only read/write their own profile and scenarios; the `public_id` on scenarios is a non-enumerable opaque token so shared/scenario URLs can't be guessed.
+- **Listings flow is RapidAPI → Census geocoder → 6-hour cache.** Addresses the geocoder can't match (≈25%) fall back to the ZIP centroid; the rest land on real coordinates.
+- **Rate limiting is per-IP via slowapi** — in-memory by default, switchable to Redis via `RATELIMIT_STORAGE_URI` so the limit holds across multiple backend instances behind a load balancer.
 
 ### Key database tables
 
@@ -128,7 +197,8 @@ Metro-level forecasting from the original design was retired in favour of the ZI
 | `/dashboard` | Headline (primary scenario), readiness score, scenarios |
 | `/profile` | Manage account details and password |
 | `/map` | Interactive listings map |
-| `/forecast/:zip` | ZIP price forecast + market context |
+| `/forecast/:zip` | ZIP price forecast + market context (with `?type=single_family\|condo`) |
+| `/scenarios` | All saved scenarios |
 | `/scenarios/:publicId` | Scenario detail |
 | `/about` | Methodology, data sources, contact form |
 
