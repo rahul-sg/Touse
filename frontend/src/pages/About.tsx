@@ -175,10 +175,16 @@ P = L · r / (1 − (1 + r)<sup>−n</sup>)
           single-family homes frequently grow at different rates in the same ZIP — the model treats
           home type as a categorical feature so it can learn those differences.
         </p>
-        <p>
-          For the full feature list, training cadence, live model version, and the latest backtest
-          accuracy numbers, see the <Link to="/methodology">methodology page</Link>.
-        </p>
+        <Link to="/methodology" className={styles.deepDiveCard}>
+          <div className={styles.deepDiveBody}>
+            <p className={styles.deepDiveEyebrow}>Deep dive</p>
+            <p className={styles.deepDiveTitle}>Read the full methodology →</p>
+            <p className={styles.deepDiveDesc}>
+              The live model card, backtest accuracy per home type, the math behind the
+              anchoring + blend, every feature, refresh cadence, and honest limitations.
+            </p>
+          </div>
+        </Link>
         <h3 className={styles.subSectionTitle}>Why a range and not a single number</h3>
         <p>
           Housing prices are noisy — random factors (one outlier sale, a rezoning vote, a major
