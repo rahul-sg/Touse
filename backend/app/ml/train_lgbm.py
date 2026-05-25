@@ -271,6 +271,7 @@ def evaluate_sample(
     )
     eval_df = panel[eval_mask].dropna(subset=REQUIRED_FOR_FIT).copy()
     eval_df["zip_code"] = pd.Categorical(eval_df["zip_code"], categories=model._zip_categories)
+    eval_df["home_type"] = pd.Categorical(eval_df["home_type"], categories=model._home_type_categories)
 
     X_eval = eval_df[feature_cols]
     eval_df["pred_growth"] = model.predict(X_eval)
@@ -346,60 +347,84 @@ def train_and_save_predictions(engine=None) -> int:
     # Train on every row that has a known 12-month target.
     train_df = panel[panel["target"].notna()].dropna(subset=REQUIRED_FOR_FIT).copy()
     train_df["zip_code"] = train_df["zip_code"].astype("category")
+    train_df["home_type"] = train_df["home_type"].astype("category")
     print(f"  train rows: {len(train_df):,}")
 
     print(f"\nTraining LightGBM ({MODEL_VERSION})...")
     t1 = time.time()
+    # Production model: reduced trees + bagging because the typed panel is ~3×
+    # the size of the prior single-type panel (3 home_types stacked). Keeps
+    # train time bounded without meaningfully changing the 12-month forecast.
     model = lgb.LGBMRegressor(
-        n_estimators=500,
+        n_estimators=250,
         learning_rate=0.05,
         num_leaves=63,
-        min_child_samples=50,
+        min_child_samples=100,
         reg_lambda=0.1,
+        subsample=0.7,
+        subsample_freq=1,
+        feature_fraction=0.9,
         n_jobs=-1,
         verbose=-1,
     )
-    model.fit(train_df[feature_cols], train_df["target"], categorical_feature=["zip_code"])
+    model.fit(
+        train_df[feature_cols],
+        train_df["target"],
+        categorical_feature=["zip_code", "home_type"],
+    )
     print(f"  trained in {time.time()-t1:.1f}s")
 
-    # Predict at the latest month per ZIP that has all features computable.
-    pred_df = panel.dropna(subset=feature_cols).groupby("zip_code", sort=False).tail(1).copy()
+    # Predict at the latest month per (zip, home_type) that has all features computable.
+    pred_df = (
+        panel.dropna(subset=feature_cols)
+        .groupby(["zip_code", "home_type"], sort=False)
+        .tail(1)
+        .copy()
+    )
     pred_df["zip_code"] = pd.Categorical(
         pred_df["zip_code"], categories=train_df["zip_code"].cat.categories
     )
-    # Drop ZIPs that the trained model didn't see (cold start — would be NaN encoded).
-    pred_df = pred_df[pred_df["zip_code"].notna()]
+    pred_df["home_type"] = pd.Categorical(
+        pred_df["home_type"], categories=train_df["home_type"].cat.categories
+    )
+    # Drop (zip, home_type) combos the trained model didn't see (cold start).
+    pred_df = pred_df[pred_df["zip_code"].notna() & pred_df["home_type"].notna()]
     pred_df["predicted_growth_12m"] = model.predict(pred_df[feature_cols])
     pred_df["predicted_endpoint_price"] = (
         pred_df["median_value"] * (1 + pred_df["predicted_growth_12m"])
     )
-    # Count training rows per ZIP (data the prediction is grounded in).
-    counts = train_df.groupby("zip_code", observed=True).size().to_dict()
+    # Count training rows per (zip, home_type) — data the prediction is grounded in.
+    counts = (
+        train_df.groupby(["zip_code", "home_type"], observed=True)
+        .size()
+        .to_dict()
+    )
 
     now = datetime.utcnow()
     rows = [
         {
             "zip_code": str(r.zip_code),
+            "home_type": str(r.home_type),
             "model_version": MODEL_VERSION,
             "trained_at": now,
             "reference_month": r.date.date(),
             "reference_price": float(r.median_value),
             "predicted_growth_12m": float(r.predicted_growth_12m),
             "predicted_endpoint_price": float(r.predicted_endpoint_price),
-            "data_points_used": int(counts.get(r.zip_code, 0)),
+            "data_points_used": int(counts.get((r.zip_code, r.home_type), 0)),
         }
         for r in pred_df.itertuples(index=False)
     ]
-    print(f"\nUpserting {len(rows):,} ZIP predictions...")
+    print(f"\nUpserting {len(rows):,} (ZIP × home_type) predictions...")
 
-    # Upsert in batches — primary key is zip_code.
+    # Upsert in batches — composite primary key is (zip_code, home_type).
     t2 = time.time()
     with engine.begin() as conn:
         for i in range(0, len(rows), 2000):
             chunk = rows[i:i + 2000]
             stmt = pg_insert(ZipLgbmPrediction.__table__).values(chunk)
             stmt = stmt.on_conflict_do_update(
-                index_elements=["zip_code"],
+                index_elements=["zip_code", "home_type"],
                 set_={c: stmt.excluded[c] for c in (
                     "model_version", "trained_at", "reference_month",
                     "reference_price", "predicted_growth_12m",

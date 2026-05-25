@@ -34,18 +34,32 @@ export default function About() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>How the forecast works</h2>
         <p>
-          Each ZIP code's 12-month price forecast comes from a <strong>Prophet</strong> time-series
-          model trained on that ZIP's full Zillow price history. To stop a recent boom from
-          extrapolating at full slope for an entire year, the projection is blended toward the
-          area's long-run growth rate — trusting the model near-term and the historical norm
-          further out. Forecasts are shown as <strong>confidence ranges</strong>, not point
-          predictions: housing is noisy, and an honest range beats false precision.
+          Each ZIP code's 12-month price forecast is a two-stage pipeline. A
+          global <strong>LightGBM panel model</strong> trained on every ZIP × month
+          in Zillow's history — with lagged prices and growth rates, US macro
+          (mortgage rate, CPI, fed funds, unemployment, housing starts, consumer
+          sentiment), metro-level supply and rent signals from Zillow Research,
+          and an election-cycle flag — produces a 12-month growth-rate anchor.
+          A per-ZIP <strong>Prophet</strong> time-series model then shapes the
+          monthly trajectory and confidence band toward that anchor, so the
+          near-term path respects local seasonality while the endpoint reflects
+          national and metro conditions.
         </p>
         <p>
-          Because the model is trained on price history alone, it cannot anticipate interest-rate
-          moves — the single biggest swing factor for housing. Rather than pretend otherwise, the
-          forecast page lets you overlay <strong>rate scenarios</strong> (rates ±1 point) so you
-          can see that sensitivity directly.
+          Forecasts are <strong>type-aware</strong>: you can switch between an
+          all-homes index, single-family only, or condos only. Zillow publishes
+          separate ZHVI series for each, and condos and single-family homes
+          often grow at meaningfully different rates in the same ZIP — the
+          model treats the home type as a categorical feature so it can learn
+          those differences.
+        </p>
+        <p>
+          Forecasts are shown as <strong>confidence ranges</strong>, not point
+          predictions: housing is noisy, and an honest range beats false
+          precision. Even with macro features, the model can't anticipate
+          policy shocks or rate surprises, so the forecast page also lets you
+          overlay <strong>rate scenarios</strong> (rates ±1 point) to see that
+          sensitivity directly.
         </p>
       </section>
 
@@ -75,7 +89,8 @@ export default function About() {
         <h2 className={styles.sectionTitle}>Limitations</h2>
         <ul className={styles.list}>
           <li>Forecasts beyond 12 months are unreliable — we don't show them.</li>
-          <li>The forecast model is trend-based; it does not predict interest rates or economic shocks.</li>
+          <li>The forecast model uses macro features but cannot predict interest-rate surprises or policy shocks — use the rate-scenario overlay to stress-test sensitivity.</li>
+          <li>The condo and single-family forecasts cover ZIPs with sufficient history for that type; in ZIPs where Zillow doesn't publish a separate series, the all-homes index is used.</li>
           <li>Listing data is cached and may be up to 6 hours stale.</li>
           <li>Listing map pins are approximate — when an address can't be geocoded precisely we place it near the ZIP center.</li>
           <li>Loan eligibility rules (e.g. VA service requirements, USDA rural limits) are not verified — always confirm with a lender.</li>
