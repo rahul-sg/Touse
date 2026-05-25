@@ -49,4 +49,10 @@ app.conf.beat_schedule = {
         "task": "tasks.ml_tasks.refresh_zip_forecasts",
         "schedule": crontab(day_of_month="16", hour="4", minute="0"),
     },
+    # Daily — fill in actual prices for served forecasts whose 12-month horizon
+    # has arrived. Cheap, idempotent, powers the per-ZIP track record badge.
+    "ml-realize-forecasts-daily": {
+        "task": "tasks.ml_tasks.realize_forecasts",
+        "schedule": crontab(hour="5", minute="0"),
+    },
 }

@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import ForecastChart from '../components/ForecastChart'
-import { getZipForecast, getZipProjection, getMarketContext } from '../utils/api'
-import type { ZipProjection, MarketContext } from '../utils/api'
+import {
+  getZipForecast,
+  getZipProjection,
+  getMarketContext,
+  getZipForecastAccuracy,
+} from '../utils/api'
+import type { ZipProjection, MarketContext, ZipForecastAccuracy } from '../utils/api'
 import type { ForecastPoint } from '../types'
 import styles from './Forecast.module.css'
 
@@ -98,6 +103,7 @@ export default function Forecast() {
   const [trends, setTrends] = useState<ZipTrends | null>(null)
   const [projection, setProjection] = useState<ZipProjection | null>(null)
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null)
+  const [accuracy, setAccuracy] = useState<ZipForecastAccuracy | null>(null)
   const [trendsLoading, setTrendsLoading] = useState(true)
   const [projLoading, setProjLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -139,6 +145,13 @@ export default function Forecast() {
         .then(setMarketContext)
         .catch(() => setMarketContext(null))
     }
+
+    // Track record: realized accuracy of past forecasts for this (zip, home_type).
+    // 0 samples is the common case for fresh ZIPs — the badge just hides.
+    setAccuracy(null)
+    getZipForecastAccuracy(zip, homeType)
+      .then(setAccuracy)
+      .catch(() => setAccuracy(null))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zip, homeType])
 
@@ -255,6 +268,17 @@ export default function Forecast() {
               last updated {new Date(projection.trained_at).toLocaleDateString()}. Rate
               scenarios apply an illustrative {Math.round(RATE_ELASTICITY * 100)}% price
               response per point of rate change — the model itself does not forecast rates.
+            </p>
+          )}
+
+          {accuracy && accuracy.samples > 0 && accuracy.mape != null && (
+            <p className={styles.sectionSub} style={{ marginTop: '0.5rem' }}>
+              <strong>Track record:</strong> our 12-month forecasts for this ZIP have
+              averaged {(accuracy.mape * 100).toFixed(1)}% MAPE across{' '}
+              {accuracy.samples} realized prediction{accuracy.samples === 1 ? '' : 's'}
+              {accuracy.bias != null && (
+                <> · bias {accuracy.bias >= 0 ? '+' : ''}{(accuracy.bias * 100).toFixed(1)}%</>
+              )}.
             </p>
           )}
         </section>

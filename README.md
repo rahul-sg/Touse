@@ -129,6 +129,113 @@ All times UTC. Cadence matches each source's actual publication schedule (see `b
 | Quarterly | `run_bea_etl` | State GDP is annual; quarterly pass is plenty |
 | 16th 02:00 | `train_global_lgbm` | Day after fresh Zillow data — retrain the panel |
 | 16th 04:00 | `refresh_zip_forecasts` | Re-fit Prophet caches against new anchors |
+| Daily 05:00 | `realize_forecasts` | Backfill `actual_price` for served forecasts whose horizon arrived |
+
+### Forecasting in depth
+
+**Target.** For each `(zip, home_type, month)` panel row, the LightGBM target is the
+12-month-forward growth: `target_t = price_{t+12} / price_t − 1`. Rows without a known 12-month-forward
+price are excluded from training but kept for prediction at serving time.
+
+**Features** (currently 37, in `backend/app/ml/train_lgbm.py::build_panel`):
+
+- **Local price history** — `price_lag_{1,3,6,12,24}m`, `growth_{1,3,6,12}m`, plus 3- and
+  12-month rolling means of monthly growth. Lag features are computed *within* each
+  `(zip_code, home_type)` group so a condo's history can never leak into a single-family lag
+  for the same ZIP.
+- **US macro (FRED + Freddie Mac)** — `mortgage_rate_30y` plus 3-month / 12-month lags and the
+  3-month change; `cpi_yoy` (derived from the raw CPI index); `unemployment`; `fed_funds_rate`
+  with 3-month and 12-month deltas; `housing_starts`; `consumer_sentiment` (UMich);
+  `new_home_sales`. Macros are pivoted wide and joined as-of, backward (only values published
+  at or before t are visible at training time t).
+- **Metro supply &amp; rent (Zillow Research)** — `invt_fs` (for-sale inventory), `new_listings`,
+  `mean_doz_pending` (days-on-market), `perc_price_cut`, `median_list_price`, `median_rent`,
+  `invt_fs_yoy`, `new_listings_yoy`, `rent_yoy`, `rent_to_price_ratio`. Joined same-month by
+  normalized metro name; same-month join is not leakage because supply at t and price-growth
+  from t→t+12 are contemporaneous → future as far as the target is concerned.
+- **Cycle &amp; seasonality** — `is_election_year` (presidential + midterm cycles correlate with
+  policy uncertainty); `month_sin` and `month_cos` for yearly periodicity.
+- **Identity (categoricals)** — `zip_code` and `home_type`. Both are passed to LightGBM as
+  categorical features so the model can learn neighborhood- and type-specific effects without
+  blowing up the feature space.
+
+**Model hyperparameters** (production, in `train_and_save_predictions`):
+
+```python
+LGBMRegressor(
+    n_estimators=250,         # reduced from 500 because the typed panel is ~3× larger
+    learning_rate=0.05,
+    num_leaves=63,
+    min_child_samples=100,    # higher than default — guards against tiny-ZIP overfit
+    reg_lambda=0.1,
+    subsample=0.7,            # row bagging for speed + variance reduction
+    subsample_freq=1,
+    feature_fraction=0.9,     # column bagging
+)
+```
+
+**The two-stage serving pipeline** (in `backend/app/services/zip_projection.py`):
+
+1. **Endpoint anchor.** Look up the latest `zip_lgbm_predictions` row for `(zip, home_type)`.
+   If present, its `predicted_endpoint_price` becomes the 12-month anchor. If absent
+   (cold-start: ZIP without sufficient history for the LightGBM panel to learn from), fall
+   back to a clamped 20-year CAGR derived from that ZIP's own series.
+2. **Monthly path.** Fit Prophet on the (ZIP, home_type) history with `yearly_seasonality=True`,
+   `changepoint_prior_scale=0.03` (low — home values move slowly). Rescale its in-sample
+   prediction so the trajectory starts from the current actual price (preventing visible
+   jumps), then blend toward the anchor path at each future month — weight starts at 0.30
+   near-term and decays to 0.15 at month 12, so the anchor dominates the level throughout.
+3. **Confidence band.** Preserve Prophet's relative band width (in % terms) and recenter it
+   on the blended value. The 80% interval is Prophet's; conformal calibration is on the
+   roadmap.
+
+**Why this design.** Two failure modes deserve two tools. The *endpoint* (where will prices
+be in 12 months) is structural — it benefits from seeing every ZIP at once: rate regimes,
+supply dynamics, regional momentum. The *path* (how does it get there month by month) is
+local — it benefits from a model fit to just that ZIP's own seasonality and noise. Anchoring
+heavily toward the LightGBM endpoint stops Prophet's known failure mode (linear extrapolation
+of recent slope after a boom).
+
+**Caching.** Forecast results are cached in `zip_forecast_results` keyed by `(zip, home_type)`,
+stamped with `model_version` and `trained_at`. The cache is treated as stale if either the
+model version changes or the row is older than 30 days. Celery refreshes the cache the day
+after the LightGBM panel retrains so served forecasts always reflect the newest anchor.
+
+**Audit trail.** Every production training run inserts a row into `model_runs` capturing
+`(version, trained_at, panel_rows, train_rows, feature_count, zips_predicted, train_seconds)`
+and optional backtest metrics (`mape_all`, `bias_all`, `per_type` JSON, `seeds` JSON). The
+`/api/v1/methodology/summary` endpoint reads the most recent row and the `/about` page links
+to a public methodology view that surfaces it to users.
+
+**Realized-accuracy tracking.** Every served forecast inserts a placeholder row into
+`forecast_realizations` (predicted endpoint, horizon end, current price at serve time). A
+daily Celery task (`tasks.ml_tasks.realize_forecasts`) backfills `actual_price` once the
+12-month horizon arrives — looking up the matching ZHVI value in `zip_price_history` for
+the `(zip, home_type, horizon_end)` triple — and computes the absolute and signed percentage
+error. The Forecast page surfaces a per-ZIP track-record badge once at least one realized
+prediction exists ("our forecasts in this ZIP have averaged X% MAPE across N realized
+predictions"). Idempotent: re-runs of the task skip already-filled rows.
+
+### ETL pipelines
+
+Each ETL is a `python -m etl.<name>` entry point under `backend/etl/`. They are idempotent:
+all writes use `INSERT ... ON CONFLICT DO UPDATE` on the appropriate composite key.
+
+| Module | Source | Cadence | Notes |
+|--------|--------|---------|-------|
+| `etl.zip_centroids` | Public ZIP centroid CSV | one-time | 41k rows; rerun only when the ZIP list changes |
+| `etl.zillow_zip` | Zillow ZHVI CSVs (3 home types) | monthly | ~15.8M rows; iterates all 3 series and upserts on `(zip, home_type, date)` |
+| `etl.zillow_metro` | Zillow Research metro panel | monthly | Inventory, new listings, days-on-market, price cuts, rent |
+| `etl.freddie_mac` | Freddie Mac PMMS | weekly | Weekly 30- and 15-year fixed rates |
+| `etl.fred` | FRED API | weekly | CPI, fed funds, unemployment, housing starts, sentiment, new-home sales |
+| `etl.bea` | BEA API | quarterly | State GDP growth |
+| `etl.geocode_listings` | US Census geocoder | on-demand | Backfills `listings_cache.lat/lng` for previously cached rows |
+
+The Celery Beat schedule in `backend/tasks/celery_app.py` matches each source's actual
+publication schedule, so what you see is never more than one publication cycle behind. ML
+retraining (`tasks.ml_tasks.train_global_lgbm`) runs the day after the monthly Zillow drop;
+`tasks.ml_tasks.refresh_zip_forecasts` runs two hours later to re-fit cached Prophet
+trajectories against the new anchors.
 
 ### Trust boundaries
 
@@ -144,12 +251,53 @@ All times UTC. Cadence matches each source's actual publication schedule (see `b
 | `users`, `scenarios` | Accounts and saved buy/rent scenarios (scenarios keyed by a non-enumerable `public_id`; each scenario carries a `home_type`) |
 | `zip_price_history` | ~15.8M monthly Zillow ZHVI values by (ZIP, `home_type`: all / single_family / condo) |
 | `zip_centroids` | ~41k ZIP → lat/lng/city/state |
-| `zip_forecast_results` | Cached 12-month projections, keyed by (zip, home_type) |
+| `zip_forecast_results` | Cached 12-month projections, keyed by (zip, home_type), stamped with `model_version` |
 | `zip_lgbm_predictions` | Endpoint anchors from the global LightGBM panel, per (zip, home_type) |
+| `model_runs` | Audit trail for every production training run — version, panel size, train time, optional backtest metrics |
+| `forecast_realizations` | One row per served forecast (predicted endpoint, horizon end). A daily Celery task fills `actual_price` once the horizon arrives; powers the per-ZIP track-record badge |
 | `macro_indicators` | Mortgage rates, CPI, fed funds, housing starts, unemployment, consumer sentiment, new-home sales, state GDP |
 | `metro_supply_history` | Zillow Research metro supply + rent panel (inventory, new listings, days-on-market, price cuts, median rent) |
 | `listings_cache` | Geocoded listing snapshots (6h TTL) with property type, sqft, year built, lot size |
 | `contact_messages` | Submissions from the contact form |
+
+**Migrations** live in `backend/alembic/versions/` and run in a single linear chain
+(`alembic upgrade head`). Schema changes are additive wherever possible — adding `home_type` to
+`zip_price_history` backfilled all 6.3M existing rows to `'all'` so prior consumers kept working
+without code changes. The `zip_lgbm_predictions` table's primary key was migrated from
+`(zip_code)` to `(zip_code, home_type)` to support per-type endpoint storage.
+
+### API surface
+
+All routes live under `/api/v1/*` unless noted. Auth-required endpoints expect a
+`Authorization: Bearer <jwt>` header.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/health` | — | Liveness probe (cheap, no DB) |
+| GET | `/healthz` | — | Readiness probe — DB reachability + freshness of price + mortgage rate data |
+| POST | `/api/v1/affordability` | — | Public affordability calculator (used by the landing page) |
+| POST | `/api/v1/rental-affordability` | — | Rent-side companion calculator |
+| POST | `/api/v1/readiness` | — | 0–100 readiness score + action plan |
+| POST | `/api/v1/compare/now-vs-wait` | — | Three rate scenarios × N months of additional saving |
+| POST | `/api/v1/register` · `/login` · `/verify-email` | — | Account flow (JWT-issuing) |
+| GET / PATCH | `/api/v1/me/{user_id}` · `/account/{user_id}` · `/profile/{user_id}` · `/target-zip/{user_id}` | ✓ | User-self CRUD |
+| POST | `/api/v1/change-password/{user_id}` · `/resend-verification/{user_id}` | ✓ | Sensitive account actions |
+| GET / POST | `/api/v1/scenarios/user/{user_id}` | ✓ | List / create scenarios for a user |
+| PUT / DELETE / PATCH | `/api/v1/scenarios/{public_id}` · `/.../primary` | ✓ | Mutate / delete / star a scenario (ownership-checked) |
+| GET | `/api/v1/zip/lookup?zip=...` | — | ZIP → lat/lng + city/state |
+| GET | `/api/v1/zip/nearest?lat=&lng=` | — | Reverse-lookup: nearest ZIP centroid |
+| GET | `/api/v1/zip/forecast?zip=&home_type=` | — | Price trend indicators (3/6/12-month % + direction) |
+| GET | `/api/v1/zip/projection?zip=&home_type=` | — | 12-month forecast (Prophet path + LightGBM anchor) |
+| GET | `/api/v1/zip/forecast-accuracy?zip=&home_type=` | — | Realized MAPE / bias for past forecasts on this ZIP (returns `samples: 0` if no track record yet) |
+| GET | `/api/v1/zip/market-context?zip=` | — | Live macro snapshot for the ZIP's state |
+| GET | `/api/v1/listings?lat=&lng=&radius_miles=&max_price=...` | — | Live for-sale listings (RapidAPI proxy + geocoded cache) |
+| GET | `/api/v1/regions/search?q=` · `/regions/nearest?lat=&lng=` | — | Region search / reverse lookup |
+| POST | `/api/v1/contact` | — | Contact-form submission |
+| GET | `/api/v1/methodology/summary` | — | Model card for the live LightGBM panel — version, training stats, coverage, backtest metrics |
+
+**Rate limits** (per IP, via slowapi): cheap endpoints 60/min, lookup 120/min,
+projection 20/min, contact 5/min. The store defaults to in-memory and can be
+swapped to Redis via `RATELIMIT_STORAGE_URI` for multi-instance deployments.
 
 ---
 
@@ -199,7 +347,8 @@ Metro-level forecasting from the original design was retired in favour of the ZI
 | `/map` | Interactive listings map |
 | `/forecast/:zip` | ZIP price forecast + market context (with `?type=single_family\|condo`) |
 | `/scenarios/:publicId` | Scenario detail |
-| `/about` | Methodology, data sources, contact form |
+| `/about` | What Touse does, math, data sources, contact form (links into Methodology) |
+| `/methodology` | Deep-dive: live model card, backtest metrics, features, pipeline math (linked from About) |
 
 ---
 
@@ -276,9 +425,78 @@ Touse/
 
 ---
 
+## Operations
+
+### Health checks
+
+- **`GET /health`** — cheap liveness probe (no DB). Use for load balancer health checks.
+- **`GET /healthz`** — readiness probe; verifies the DB is reachable and reports the most
+  recent `zip_price_history.date` and `mortgage_rate_30y` observation date. Returns
+  `status: "degraded"` if either feed has never been ingested.
+
+### Retraining the LightGBM panel
+
+The Celery Beat schedule retrains automatically on the 16th of each month. To trigger manually:
+
+```bash
+cd backend && source .venv/bin/activate
+DATABASE_URL='postgresql+asyncpg://touse:touse@localhost:5433/touse' \
+  python -u -m app.ml.train_lgbm --save-predictions
+```
+
+The script builds the full panel (~25 min on a laptop), trains LightGBM (~3 min with current
+hyperparams), upserts predictions per `(zip, home_type)` (~10 sec), and records a row in
+`model_runs`. Cached Prophet forecasts older than 30 days or stamped with the prior model
+version are automatically re-fit on next request.
+
+### Running a backtest
+
+```bash
+cd backend && source .venv/bin/activate
+python -u -m app.ml.train_lgbm --seeds 42,7,100,2024,1337
+```
+
+Output reports MAPE / sMAPE / bias for the home_type=`all` slice (baseline-comparable to
+prior single-type models) plus a per-home-type breakdown (apples-to-apples within the same
+eval ZIPs).
+
+### Common ops queries
+
+```sql
+-- Most recent model run
+SELECT model_version, trained_at, panel_rows, train_rows, zips_predicted, train_seconds
+FROM model_runs ORDER BY trained_at DESC LIMIT 1;
+
+-- Coverage of typed predictions
+SELECT home_type, COUNT(*) FROM zip_lgbm_predictions GROUP BY home_type;
+
+-- Forecast cache health (model version drift)
+SELECT model_version, home_type, COUNT(*)
+FROM zip_forecast_results GROUP BY model_version, home_type
+ORDER BY 1, 2;
+
+-- Stale forecasts that next request will retrain
+SELECT zip_code, home_type, trained_at FROM zip_forecast_results
+WHERE trained_at < NOW() - INTERVAL '30 days' LIMIT 20;
+```
+
+### Invalidating cached forecasts
+
+A new model version invalidates the cache automatically (mismatch on `model_version`).
+To force-invalidate without bumping the version (e.g. after a hand-edit to an anchor):
+
+```sql
+DELETE FROM zip_forecast_results WHERE home_type = 'condo';  -- or specific zip
+```
+
+The next request for that `(zip, home_type)` will re-train Prophet and re-cache.
+
+---
+
 ## Notes & limitations
 
 - **Forecasts** are 12-month projections: a global LightGBM panel (lagged prices + US macro + metro supply/rent + election cycle) sets the endpoint, and a per-ZIP × home-type Prophet model shapes the monthly path. Honest confidence ranges, not guarantees. The model can't anticipate rate surprises or policy shocks, so the forecast page offers illustrative rate-scenario overlays.
-- **Type-aware:** condo and single-family forecasts are served for ZIPs where Zillow publishes a separate series; otherwise the all-homes index is used.
+- **Type-aware:** condo and single-family forecasts are served only for ZIPs where Zillow publishes a separate series; otherwise switch the toggle to "All homes."
 - **Listing coordinates** come from the US Census geocoder. Addresses it can't match (≈25%) fall back to the ZIP centroid.
-- **Market data freshness** is kept current by a Celery Beat schedule (`backend/tasks/celery_app.py`): Freddie Mac mortgage rates weekly, FRED monthly, Zillow ZIP values + metro supply + LightGBM panel retraining monthly, BEA quarterly. The `celery` and `celery-beat` services are included in `docker compose`; the worker image installs cmdstan at build time so Prophet retraining works in-container.
+- **Market data freshness** is kept current by a Celery Beat schedule (`backend/tasks/celery_app.py`): Freddie Mac mortgage rates weekly, FRED weekly, Zillow ZIP values + metro supply + LightGBM panel retraining monthly, BEA quarterly. The `celery` and `celery-beat` services are included in `docker compose`; the worker image installs cmdstan at build time so Prophet retraining works in-container.
+- **No financial advice.** Touse is a planning tool. Confirm with a licensed lender before any major decision.

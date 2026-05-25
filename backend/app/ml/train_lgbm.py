@@ -38,9 +38,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.ml.backtest import DEFAULT_MIN_TRAIN, DEFAULT_FOLDS  # match Prophet baseline scope
 from app.models.zip_lgbm_prediction import ZipLgbmPrediction
+from app.models.model_run import ModelRun
 from etl.zillow_metro import normalize_metro  # noqa: E402 — keep DB models above
 
 MODEL_VERSION = "lgbm_panel_v4_typed"
+VALID_HOME_TYPES = ("all", "single_family", "condo")
 
 # Rows must have the target and the longest core price lag; everything else
 # (macros, sentiment, supply) can be NaN — LightGBM treats missing as a signal.
@@ -234,12 +236,19 @@ def build_and_train() -> tuple[lgb.LGBMRegressor, pd.DataFrame, list[str], pd.Ti
 
     print(f"\nTraining LightGBM on {len(X_train):,} rows × {len(feature_cols)} features...")
     t1 = time.time()
+    # Same hyperparams as production (see train_and_save_predictions) — reduced
+    # trees + bagging because the typed panel is ~3× the size of the prior
+    # single-type panel; backtest must match production for the numbers to mean
+    # anything operationally.
     model = lgb.LGBMRegressor(
-        n_estimators=500,
+        n_estimators=250,
         learning_rate=0.05,
         num_leaves=63,
-        min_child_samples=50,
+        min_child_samples=100,
         reg_lambda=0.1,
+        subsample=0.7,
+        subsample_freq=1,
+        feature_fraction=0.9,
         n_jobs=-1,
         verbose=-1,
     )
@@ -290,18 +299,38 @@ def evaluate_sample(
         / ((eval_df["pred_price_future"].abs() + eval_df["actual_price_future"].abs()) / 2)
     )
 
+    # Apples-to-apples slice: 'all'-type only. This is the metric comparable
+    # to the v2/v3 baselines, since those models only saw the combined index.
+    all_only = eval_df[eval_df["home_type"] == "all"]
+
     summary = {
         "seed": seed,
-        "n": int(len(eval_df)),
-        "mape": float(eval_df["abs_pct_error"].mean()),
-        "smape": float(eval_df["smape"].mean()),
-        "bias": float(eval_df["signed_pct_error"].mean()),
+        "n": int(len(all_only)),
+        "mape": float(all_only["abs_pct_error"].mean()) if len(all_only) else float("nan"),
+        "smape": float(all_only["smape"].mean()) if len(all_only) else float("nan"),
+        "bias": float(all_only["signed_pct_error"].mean()) if len(all_only) else float("nan"),
+        # Per-home-type breakdown — useful for spotting that condo/SFR slices
+        # behave differently than the all-homes index. Same eval ZIPs, just
+        # scored on whichever home_type rows exist for them.
+        "per_type": {
+            ht: {
+                "n": int((eval_df["home_type"] == ht).sum()),
+                "mape": float(eval_df.loc[eval_df["home_type"] == ht, "abs_pct_error"].mean())
+                    if (eval_df["home_type"] == ht).any() else float("nan"),
+                "smape": float(eval_df.loc[eval_df["home_type"] == ht, "smape"].mean())
+                    if (eval_df["home_type"] == ht).any() else float("nan"),
+                "bias": float(eval_df.loc[eval_df["home_type"] == ht, "signed_pct_error"].mean())
+                    if (eval_df["home_type"] == ht).any() else float("nan"),
+            }
+            for ht in VALID_HOME_TYPES
+        },
     }
     return eval_df, summary
 
 
 def _print_multi_seed(summaries: list[dict]) -> None:
-    print("\nLightGBM panel — 12-month horizon, per seed")
+    # ── Apples-to-apples slice (home_type='all') — comparable to prior baselines
+    print("\nLightGBM panel — 12-month horizon (home_type='all', baseline-comparable)")
     print(f"  {'seed':>6}  {'n':>5}  {'MAPE':>7}  {'sMAPE':>7}  {'bias (ME)':>10}")
     print("  " + "-" * 44)
     for s in summaries:
@@ -320,9 +349,31 @@ def _print_multi_seed(summaries: list[dict]) -> None:
             f"MAPE mean {mape_mean*100:.2f}% (spread {mape_spread*100:.2f}pp), "
             f"bias mean {bias_mean*100:+.2f}% (spread {bias_spread*100:.2f}pp)"
         )
+
+    # ── Per-home-type breakdown — same eval ZIPs, sliced by type
+    print("\nPer-home-type breakdown (same eval ZIPs, all sampled seeds averaged)")
+    print(f"  {'home_type':<14}  {'n':>6}  {'MAPE':>7}  {'sMAPE':>7}  {'bias (ME)':>10}")
+    print("  " + "-" * 52)
+    for ht in VALID_HOME_TYPES:
+        per = [s["per_type"].get(ht) for s in summaries if s.get("per_type", {}).get(ht)]
+        per = [p for p in per if p and p["n"]]
+        if not per:
+            print(f"  {ht:<14}  {'—':>6}  {'—':>7}  {'—':>7}  {'—':>10}")
+            continue
+        n_total = sum(p["n"] for p in per)
+        mape_avg = sum(p["mape"] * p["n"] for p in per) / n_total
+        smape_avg = sum(p["smape"] * p["n"] for p in per) / n_total
+        bias_avg = sum(p["bias"] * p["n"] for p in per) / n_total
+        print(
+            f"  {ht:<14}  {n_total:>6}  "
+            f"{mape_avg*100:>6.2f}%  {smape_avg*100:>6.2f}%  "
+            f"{bias_avg*100:>+9.2f}%"
+        )
+
     print(
-        "\n  Prophet+CAGR tuned baseline (same protocol, seed=42):\n"
-        "    MAPE 4.66%   sMAPE 4.48%   bias +4.33%"
+        "\n  Prior baselines (same protocol, seed=42):\n"
+        "    Prophet+CAGR        MAPE 4.66%   bias +4.33%\n"
+        "    LGBM v2 (supply)    MAPE 3.18%   bias  -0.62%"
     )
 
 
@@ -372,7 +423,8 @@ def train_and_save_predictions(engine=None) -> int:
         train_df["target"],
         categorical_feature=["zip_code", "home_type"],
     )
-    print(f"  trained in {time.time()-t1:.1f}s")
+    train_seconds = time.time() - t1
+    print(f"  trained in {train_seconds:.1f}s")
 
     # Predict at the latest month per (zip, home_type) that has all features computable.
     pred_df = (
@@ -433,6 +485,28 @@ def train_and_save_predictions(engine=None) -> int:
             )
             conn.execute(stmt)
     print(f"  wrote {len(rows):,} rows in {time.time()-t2:.1f}s")
+
+    # Record the run so the Methodology page can show users when and how the
+    # served model was trained. Failures here shouldn't roll back the
+    # predictions write — log and move on.
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                ModelRun.__table__.insert().values(
+                    model_version=MODEL_VERSION,
+                    trained_at=now,
+                    panel_rows=int(len(panel)),
+                    train_rows=int(len(train_df)),
+                    feature_count=int(len(feature_cols)),
+                    zips_predicted=int(len(rows)),
+                    train_seconds=float(train_seconds),
+                    notes="production retrain (--save-predictions)",
+                )
+            )
+        print(f"  recorded run in model_runs")
+    except Exception as exc:  # pragma: no cover — defensive
+        print(f"  warning: failed to record model_run: {exc}")
+
     return len(rows)
 
 

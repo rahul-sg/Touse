@@ -11,6 +11,7 @@ import Profile from './pages/Profile'
 import MapView from './pages/MapView'
 import Forecast from './pages/Forecast'
 import About from './pages/About'
+import Methodology from './pages/Methodology'
 import Scenarios from './pages/Scenarios'
 import ScenarioDetail from './pages/ScenarioDetail'
 import VerifyEmail from './pages/VerifyEmail'
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/map" element={<MapView />} />
             <Route path="/forecast/:zip" element={<Forecast />} />
             <Route path="/about" element={<About />} />
+            <Route path="/methodology" element={<Methodology />} />
             <Route path="/scenarios" element={<Scenarios />} />
             <Route path="/scenarios/:publicId" element={<ScenarioDetail />} />
           </Routes>

@@ -298,3 +298,54 @@ export async function getRentalAffordability(payload: {
   const { data } = await api.post('/api/v1/rental-affordability', payload)
   return data
 }
+
+// ── Methodology ──────────────────────────────────────────────────────────────
+
+export interface MethodologySummary {
+  model: {
+    version: string
+    trained_at: string
+    panel_rows: number
+    train_rows: number
+    feature_count: number
+    zips_predicted: number
+    train_seconds: number
+    backtest_mape_all: number | null
+    backtest_bias_all: number | null
+    backtest_per_type: Record<string, { n: number; mape: number; smape: number; bias: number }> | null
+    notes: string | null
+  } | null
+  coverage: {
+    by_home_type: Record<string, number>
+    total_predictions: number
+    latest_price_month: string | null
+  }
+  features: { group: string; items: string[] }[]
+  pipeline: { stage_1: string; stage_2: string; fallback: string }
+}
+
+export async function getMethodologySummary(): Promise<MethodologySummary> {
+  const { data } = await api.get('/api/v1/methodology/summary')
+  return data
+}
+
+// ── Per-ZIP realized forecast accuracy ───────────────────────────────────────
+
+export interface ZipForecastAccuracy {
+  zip_code: string
+  home_type: string
+  samples: number
+  mape: number | null
+  bias: number | null
+  last_realized_at: string | null
+}
+
+export async function getZipForecastAccuracy(
+  zip: string,
+  homeType: string = 'all'
+): Promise<ZipForecastAccuracy> {
+  const { data } = await api.get('/api/v1/zip/forecast-accuracy', {
+    params: { zip, home_type: homeType },
+  })
+  return data
+}

@@ -9,6 +9,11 @@ Celery tasks for the ZIP forecasting pipeline.
                           stalest cached forecasts, using the latest LGBM
                           endpoint as the blend anchor. Runs monthly, after
                           train_global_lgbm.
+
+  realize_forecasts     — fills in actual_price + abs_pct_error for served
+                          forecasts whose 12-month horizon has arrived.
+                          Powers the per-ZIP track record on the forecast
+                          page. Cheap, idempotent — safe to run frequently.
 """
 import os
 from datetime import datetime
@@ -94,3 +99,67 @@ def refresh_zip_forecasts(self):
         print(f"refresh_zip_forecasts: refreshed {refreshed}/{len(zip_codes)} ZIPs")
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60 * 30)
+
+
+@app.task(name="tasks.ml_tasks.realize_forecasts", bind=True, max_retries=2)
+def realize_forecasts(self):
+    """Fill actual_price + error metrics for served forecasts whose horizon arrived.
+
+    Scans forecast_realizations for rows with `actual_price IS NULL` and
+    `horizon_end <= today`. For each, looks up the matching `(zip, home_type,
+    horizon_end)` row in zip_price_history and writes the realized price plus
+    the absolute and signed % error vs the predicted endpoint.
+
+    Idempotent: rows with `actual_price IS NOT NULL` are skipped, so re-runs
+    are no-ops. Designed to be cheap enough to schedule daily.
+    """
+    try:
+        from datetime import date as _date, datetime
+        from sqlalchemy import create_engine, select, and_
+        from sqlalchemy.orm import Session
+
+        from app.models.forecast_realization import ForecastRealization
+        from app.models.zip_price_history import ZipPriceHistory
+
+        engine = create_engine(_DB_URL)
+        filled = 0
+        skipped_missing = 0
+
+        with Session(engine) as session:
+            pending = session.execute(
+                select(ForecastRealization).where(
+                    and_(
+                        ForecastRealization.actual_price.is_(None),
+                        ForecastRealization.horizon_end <= _date.today(),
+                    )
+                )
+            ).scalars().all()
+
+            for row in pending:
+                actual = session.execute(
+                    select(ZipPriceHistory.median_value).where(
+                        ZipPriceHistory.zip_code == row.zip_code,
+                        ZipPriceHistory.home_type == row.home_type,
+                        ZipPriceHistory.date == row.horizon_end,
+                    )
+                ).scalar_one_or_none()
+                if actual is None or actual == 0:
+                    skipped_missing += 1
+                    continue
+
+                actual = float(actual)
+                row.actual_price = actual
+                row.abs_pct_error = abs(row.predicted_endpoint_price - actual) / actual
+                row.signed_pct_error = (row.predicted_endpoint_price - actual) / actual
+                row.realized_at = datetime.utcnow()
+                filled += 1
+
+            session.commit()
+
+        print(
+            f"realize_forecasts: filled {filled}, "
+            f"still missing actual {skipped_missing}, "
+            f"total pending {len(pending)}"
+        )
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60 * 60)

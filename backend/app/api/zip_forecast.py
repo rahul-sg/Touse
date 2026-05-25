@@ -17,6 +17,7 @@ from app.db import get_db
 from app.models.zip_centroid import ZipCentroid
 from app.models.zip_price_history import ZipPriceHistory
 from app.models.macro_indicator import MacroIndicator
+from app.models.forecast_realization import ForecastRealization
 from app.services.zip_projection import get_or_train
 
 router = APIRouter(prefix="/api/v1/zip", tags=["zip"])
@@ -291,4 +292,55 @@ async def market_context(
         "fed_funds_rate": round(fed_funds, 2) if fed_funds is not None else None,
         "state_gdp_growth_pct": round(state_gdp_pct, 1) if state_gdp_pct is not None else None,
         "state_gdp_year": state_gdp_date.year if state_gdp_date else None,
+    }
+
+
+# ── Per-(ZIP, home_type) realized-accuracy track record ────────────────────────
+
+@router.get("/forecast-accuracy")
+@limiter.limit("60/minute")
+async def zip_forecast_accuracy(
+    request: Request,
+    zip: str = Query(..., min_length=3, max_length=10),
+    home_type: str = Query(default="all", regex="^(all|single_family|condo)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Realized accuracy of past served forecasts for a (ZIP, home_type).
+
+    Reads forecast_realizations rows with `actual_price IS NOT NULL` (i.e. the
+    12-month horizon arrived and was backfilled) and returns mean absolute
+    percentage error plus a signed bias. Lets the forecast page surface a
+    live track record — "our forecasts in this ZIP have averaged X% MAPE over
+    the last 12 months."
+
+    Returns 200 with `{ samples: 0, ... }` rather than 404 when no realized
+    forecasts exist yet — the frontend treats it as "no track record yet" and
+    just hides the badge.
+    """
+    from sqlalchemy import func as _func, desc as _desc
+
+    zip_clean = zip.strip().zfill(5)
+    samples = (
+        await db.execute(
+            select(
+                _func.count().label("n"),
+                _func.avg(ForecastRealization.abs_pct_error).label("mape"),
+                _func.avg(ForecastRealization.signed_pct_error).label("bias"),
+                _func.max(ForecastRealization.realized_at).label("last_realized"),
+            )
+            .where(
+                ForecastRealization.zip_code == zip_clean,
+                ForecastRealization.home_type == home_type,
+                ForecastRealization.actual_price.isnot(None),
+            )
+        )
+    ).one()
+
+    return {
+        "zip_code": zip_clean,
+        "home_type": home_type,
+        "samples": int(samples.n or 0),
+        "mape": float(samples.mape) if samples.mape is not None else None,
+        "bias": float(samples.bias) if samples.bias is not None else None,
+        "last_realized_at": samples.last_realized.isoformat() if samples.last_realized else None,
     }

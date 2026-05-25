@@ -90,3 +90,64 @@
   font-size: 0.78rem;
   color: var(--color-text-muted);
 }
+
+.subSectionTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.5rem;
+  color: #1a1f2e;
+  letter-spacing: -0.005em;
+}
+
+.codeBlock {
+  background: #f4f1ea;
+  border: 1px solid #e7e3da;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 0.95rem;
+  color: #1a1f2e;
+  margin: 0.75rem 0;
+  white-space: pre-wrap;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.93rem;
+}
+
+.dataTable th,
+.dataTable td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #ece8de;
+  vertical-align: top;
+}
+
+.dataTable th {
+  background: #f7f5f1;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dataTable tr:last-child td {
+  border-bottom: none;
+}
+
+.note {
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-style: italic;
+  border-left: 3px solid #d6cfbe;
+  padding: 0.4rem 0 0.4rem 0.85rem;
+  margin: 0.75rem 0;
+}

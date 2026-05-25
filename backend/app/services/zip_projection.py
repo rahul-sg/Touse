@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.zip_price_history import ZipPriceHistory
 from app.models.zip_forecast_result import ZipForecastResult
 from app.models.zip_lgbm_prediction import ZipLgbmPrediction
+from app.models.forecast_realization import ForecastRealization
 
 # Prophet/Stan are chatty — keep their output out of the API logs.
 logging.getLogger("prophet").setLevel(logging.WARNING)
@@ -241,6 +242,29 @@ async def get_or_train(zip_code: str, db: AsyncSession, home_type: str = "all") 
             forecast_12m=points,
         )
         db.add(row)
+
+    # Record this freshly-trained projection in forecast_realizations so we can
+    # measure its accuracy when the horizon arrives. We only insert when we
+    # *trained* (not on cache hits), so the audit table reflects the model
+    # versions that actually produced forecasts rather than every cache read.
+    last_point = points[-1] if points else None
+    if last_point and current_value:
+        try:
+            horizon_end = date.fromisoformat(last_point["month"] + "-01")
+        except ValueError:
+            horizon_end = None
+        if horizon_end:
+            db.add(
+                ForecastRealization(
+                    zip_code=zip_code,
+                    home_type=home_type,
+                    model_version=MODEL_VERSION,
+                    served_at=datetime.utcnow(),
+                    horizon_end=horizon_end,
+                    current_price_at_serve=float(current_value),
+                    predicted_endpoint_price=float(last_point["price"]),
+                )
+            )
 
     await db.commit()
     await db.refresh(row)

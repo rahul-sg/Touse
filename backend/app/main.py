@@ -9,7 +9,7 @@ from app.db import get_db
 from app.limiter import limiter
 from app.api import affordability, listings, regions
 from app.api import auth
-from app.api import scenarios, rental, readiness, compare, zip_forecast, contact
+from app.api import scenarios, rental, readiness, compare, zip_forecast, contact, methodology
 from app.models.macro_indicator import MacroIndicator
 from app.models.zip_price_history import ZipPriceHistory
 
@@ -46,6 +46,7 @@ app.include_router(compare.router)
 # (zip_forecast.router → /api/v1/zip/projection, trained on zip_price_history).
 app.include_router(zip_forecast.router)
 app.include_router(contact.router, prefix="/api/v1")
+app.include_router(methodology.router)
 
 
 @app.get("/health")
