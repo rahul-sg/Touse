@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import TouseMap from '../components/TouseMap'
 import ListingSidebar from '../components/ListingSidebar'
+import MapFilterBar from '../components/MapFilterBar'
 import ZipForecastPanel from '../components/ZipForecastPanel'
 import { useListings } from '../hooks/useListings'
 import { usePrimaryScenario } from '../hooks/usePrimaryScenario'
@@ -140,20 +141,23 @@ export default function MapView() {
           )}
         </div>
       )}
+      <MapFilterBar
+        maxPrice={maxPrice}
+        onMaxPriceChange={setMaxPrice}
+        minBeds={minBeds}
+        onMinBedsChange={setMinBeds}
+        propertyTypes={propertyTypes}
+        onPropertyTypesChange={setPropertyTypes}
+        minSqft={minSqft}
+        onMinSqftChange={setMinSqft}
+        minYearBuilt={minYearBuilt}
+        onMinYearBuiltChange={setMinYearBuilt}
+        resultCount={listings.length}
+      />
       <div className={styles.body}>
         <ListingSidebar
           listings={listings}
           isLoading={isFetching}
-          maxPrice={maxPrice}
-          onMaxPriceChange={setMaxPrice}
-          minBeds={minBeds}
-          onMinBedsChange={setMinBeds}
-          propertyTypes={propertyTypes}
-          onPropertyTypesChange={setPropertyTypes}
-          minSqft={minSqft}
-          onMinSqftChange={setMinSqft}
-          minYearBuilt={minYearBuilt}
-          onMinYearBuiltChange={setMinYearBuilt}
           zipForecastPanel={forecastPanel}
           onListingClick={setFocusedListing}
           selectedId={focusedListing?.id ?? null}

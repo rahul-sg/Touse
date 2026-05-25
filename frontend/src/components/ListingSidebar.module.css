@@ -5,22 +5,29 @@
   flex-direction: column;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
-  height: calc(100vh - 64px);
+  /* Sized by the parent .body flex container — flex:1 on the row + min-height:0
+     here lets the .list child scroll while the forecast slot + header stay
+     anchored at the top. */
+  min-height: 0;
   overflow: hidden;
 }
 
-.filters {
-  padding: 1.25rem 1.25rem 1rem;
+.listHeader {
+  padding: 0.9rem 1.1rem 0.6rem;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-stone);
+  flex-shrink: 0;
 }
 
 .heading {
   font-family: var(--font-serif);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--color-forest);
-  margin: 0 0 1rem;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 
 .resultCount {

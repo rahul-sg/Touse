@@ -1,0 +1,196 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1.25rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  white-space: nowrap;
+  /* Stack above the map's MapLibre controls. */
+  position: relative;
+  z-index: 5;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── Max price slider ── */
+.priceControl {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.range {
+  width: 140px;
+  accent-color: var(--color-forest);
+  cursor: pointer;
+}
+
+.priceValue {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-forest);
+  min-width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Chip groups ── */
+.chipGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.chip {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
+}
+
+.chipActive {
+  background: var(--color-forest);
+  border-color: var(--color-forest);
+  color: #fff;
+}
+
+.chipActive:hover {
+  color: #fff;
+}
+
+/* ── More filters dropdown ── */
+.advancedWrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+}
+
+.moreBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.moreBtn:hover {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
+}
+
+.moreBtnActive {
+  border-color: var(--color-forest);
+  color: var(--color-forest);
+  background: rgba(28, 58, 47, 0.05);
+}
+
+.moreBadge {
+  background: var(--color-forest);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.advancedPanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.advancedRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.advancedLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.numberInput {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.9rem;
+  background: var(--color-surface);
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: var(--color-forest);
+  box-shadow: 0 0 0 2px rgba(28, 58, 47, 0.12);
+}
+
+/* ── Result count, pinned right ── */
+.countWrap {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.count {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
