@@ -32,6 +32,10 @@ psycopg2-binary==2.9.9
 # Date utilities
 python-dateutil==2.9.0
 
+# Email validation
+pydantic[email]==2.7.1
+email-validator==2.1.1
+
 # Rate limiting / Security
 slowapi==0.1.9
 python-jose[cryptography]==3.3.0
