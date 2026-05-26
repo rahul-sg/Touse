@@ -25,6 +25,11 @@ _ORIGINS = [
     "https://touse.app",
     "https://www.touse.app",
 ]
+# Allow additional origins via env (e.g. http://1.2.3.4 for IP-only deployments)
+import os as _os
+_extra = _os.environ.get("EXTRA_CORS_ORIGINS", "")
+if _extra:
+    _ORIGINS += [o.strip() for o in _extra.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,

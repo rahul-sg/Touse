@@ -1,0 +1,27 @@
+# IP-only deployment — no TLS, no domain.
+# Usage: docker run ... -v ./Caddyfile.ip:/etc/caddy/Caddyfile
+# Or rename to Caddyfile before `docker compose up`.
+:80 {
+    # API routes
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle /health {
+        reverse_proxy backend:8000
+    }
+
+    # Frontend SPA
+    handle /* {
+        reverse_proxy frontend:3000
+    }
+
+    encode gzip
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
