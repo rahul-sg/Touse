@@ -12,8 +12,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Install a working cmdstan and disable Prophet's broken bundled one, so
-# /zip/projection and the refresh_zip_forecasts task can train models.
-RUN python scripts/setup_prophet.py
-
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
