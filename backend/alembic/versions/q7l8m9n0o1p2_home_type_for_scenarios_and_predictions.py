@@ -40,18 +40,48 @@ def upgrade() -> None:
         ['zip_code', 'home_type'],
     )
 
-    # ── zip_forecast_results: add home_type, uniq becomes (zip, type) ──
-    op.add_column(
-        'zip_forecast_results',
-        sa.Column('home_type', sa.String(20), nullable=False, server_default='all'),
-    )
-    op.drop_index('ix_zip_forecast_results_zip_code', table_name='zip_forecast_results')
-    op.create_index(
-        'ix_zip_forecast_zip_type',
-        'zip_forecast_results',
-        ['zip_code', 'home_type'],
-        unique=True,
-    )
+    # ── zip_forecast_results: create if missing, then add home_type ──
+    # This table was not created in an earlier migration, so we create it here
+    # (with home_type already included) if it doesn't exist yet.
+    conn = op.get_bind()
+    table_exists = conn.execute(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+            "WHERE table_name='zip_forecast_results')"
+        )
+    ).scalar()
+
+    if not table_exists:
+        op.create_table(
+            'zip_forecast_results',
+            sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
+            sa.Column('zip_code', sa.String(10), nullable=False),
+            sa.Column('home_type', sa.String(20), nullable=False, server_default='all'),
+            sa.Column('model_version', sa.String(32), nullable=False),
+            sa.Column('trained_at', sa.DateTime, nullable=False),
+            sa.Column('current_value', sa.Float, nullable=True),
+            sa.Column('forecast_12m_pct', sa.Float, nullable=True),
+            sa.Column('data_points', sa.Integer, default=0),
+            sa.Column('forecast_12m', sa.JSON, nullable=True),
+        )
+        op.create_index(
+            'ix_zip_forecast_zip_type',
+            'zip_forecast_results',
+            ['zip_code', 'home_type'],
+            unique=True,
+        )
+    else:
+        op.add_column(
+            'zip_forecast_results',
+            sa.Column('home_type', sa.String(20), nullable=False, server_default='all'),
+        )
+        op.drop_index('ix_zip_forecast_results_zip_code', table_name='zip_forecast_results')
+        op.create_index(
+            'ix_zip_forecast_zip_type',
+            'zip_forecast_results',
+            ['zip_code', 'home_type'],
+            unique=True,
+        )
 
 
 def downgrade() -> None:
