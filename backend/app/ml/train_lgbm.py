@@ -61,7 +61,11 @@ SAMPLE_DEFAULT = 30          # same sample size as Prophet baseline
 # ── Feature engineering ───────────────────────────────────────────────────────
 
 def _load_prices(engine) -> pd.DataFrame:
-    """All monthly ZIP prices per (zip, home_type), sorted by (zip, home_type, date).
+    """Recent monthly ZIP prices per (zip, home_type), sorted by (zip, home_type, date).
+
+    Loads from 2017-01-01 onward — enough for 24-month lag features plus a
+    12-month target horizon, while keeping the in-memory footprint manageable
+    on a t3.small (avoids OOM on the full ~28-year dataset).
 
     Per-(zip,home_type) ordering matters — the lag features are computed within
     each (zip, home_type) group, so a condo's history must not leak into a SFR
@@ -69,7 +73,7 @@ def _load_prices(engine) -> pd.DataFrame:
     """
     df = pd.read_sql(
         "SELECT zip_code, home_type, date, median_value, metro "
-        "FROM zip_price_history WHERE median_value IS NOT NULL",
+        "FROM zip_price_history WHERE median_value IS NOT NULL AND date >= '2017-01-01'",
         engine,
     )
     df["date"] = pd.to_datetime(df["date"])
