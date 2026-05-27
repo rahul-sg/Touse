@@ -184,14 +184,20 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
     LEFT JOIN macro_final m ON m.month_end = p.date
     WHERE p.price_lag_12m IS NOT NULL
     """
-    df = pd.read_sql(sql, engine)
+    # Read in chunks and downcast each chunk before holding it in memory.
+    # pd.read_sql with no chunksize loads the whole result as float64 then
+    # downcast — that intermediate is ~2× peak. Chunking keeps peak bounded
+    # to roughly the final panel size.
+    chunks = []
+    for chunk in pd.read_sql(sql, engine, chunksize=500_000):
+        float_cols = chunk.select_dtypes(include=["float64"]).columns
+        chunk[float_cols] = chunk[float_cols].astype("float32")
+        chunks.append(chunk)
+    df = pd.concat(chunks, ignore_index=True)
+    del chunks  # free intermediate list
+
     df["date"] = pd.to_datetime(df["date"])
     df["metro_norm"] = df["metro"].fillna("").map(normalize_metro)
-
-    # Downcast floats to float32 — halves memory (8B → 4B per cell) with
-    # negligible loss of precision for tree-based models like LightGBM.
-    float_cols = df.select_dtypes(include=["float64"]).columns
-    df[float_cols] = df[float_cols].astype("float32")
 
     # Categorical encoding for the high-cardinality string columns
     df["zip_code"] = df["zip_code"].astype("category")
