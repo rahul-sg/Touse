@@ -218,9 +218,23 @@ async def get_or_train(zip_code: str, db: AsyncSession, home_type: str = "all") 
     anchor_price = float(lgbm.predicted_endpoint_price) if lgbm else None
 
     # Prophet fitting is CPU-bound — run it off the event loop.
-    points, current_value, pct_12m = await asyncio.to_thread(
-        _fit_and_forecast, history, anchor_price
-    )
+    # Falls back to LGBM-only output if Prophet/Stan isn't available
+    # (e.g. the production box never had cmdstan compiled). The user
+    # loses the monthly chart but still sees the 12-month projection.
+    try:
+        points, current_value, pct_12m = await asyncio.to_thread(
+            _fit_and_forecast, history, anchor_price
+        )
+    except Exception as exc:  # noqa: BLE001 — Prophet/Stan import or fit error
+        import logging
+        logging.warning(f"Prophet unavailable for {zip_code}/{home_type}: {exc}. Falling back to LGBM-only.")
+        if not lgbm:
+            return None
+        # Build a minimal response from the LGBM prediction alone — no
+        # month-by-month chart, but the 12-month % and current value land.
+        current_value = float(lgbm.reference_price)
+        pct_12m = float(lgbm.predicted_growth_12m) * 100.0
+        points = []
 
     if cached:
         cached.model_version = MODEL_VERSION
