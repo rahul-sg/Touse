@@ -86,7 +86,7 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
             LAG(median_value, 24)  OVER w AS price_lag_24m,
             LEAD(median_value, 12) OVER w AS price_future
         FROM zip_price_history
-        WHERE median_value IS NOT NULL
+        WHERE median_value IS NOT NULL AND date >= '2021-01-01'
         WINDOW w AS (PARTITION BY zip_code, home_type ORDER BY date)
     ),
     price_growth AS (
