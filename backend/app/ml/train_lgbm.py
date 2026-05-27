@@ -73,7 +73,7 @@ def _load_prices(engine) -> pd.DataFrame:
     """
     df = pd.read_sql(
         "SELECT zip_code, home_type, date, median_value, metro "
-        "FROM zip_price_history WHERE median_value IS NOT NULL AND date >= '2017-01-01'",
+        "FROM zip_price_history WHERE median_value IS NOT NULL AND date >= '2019-01-01'",
         engine,
     )
     df["date"] = pd.to_datetime(df["date"])
