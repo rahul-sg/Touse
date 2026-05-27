@@ -199,6 +199,10 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
     df["date"] = pd.to_datetime(df["date"])
     df["metro_norm"] = df["metro"].fillna("").map(normalize_metro)
 
+    # Drop columns we no longer need after deriving metro_norm + target.
+    # Saves ~150MB on the full panel and gives the supply merge headroom.
+    df = df.drop(columns=["metro", "price_future"])
+
     # Categorical encoding for the high-cardinality string columns
     df["zip_code"] = df["zip_code"].astype("category")
     df["home_type"] = df["home_type"].astype("category")
@@ -281,15 +285,17 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
     prices["month_sin"] = np.sin(2 * np.pi * months / 12)
     prices["month_cos"] = np.cos(2 * np.pi * months / 12)
 
-    # Macro features are already merged in by _load_prices_with_macro (SQL).
-    # Only the metro supply equi-join remains in pandas because metro_norm
-    # depends on the Python normalize_metro() function.
-    supply = _load_metro_supply(engine)
-    # Downcast supply numerics to float32 before merging so the joined panel
-    # stays at the lower memory footprint set by _load_prices_with_macro.
-    supply_float_cols = supply.select_dtypes(include=["float64"]).columns
-    supply[supply_float_cols] = supply[supply_float_cols].astype("float32")
-    prices = prices.merge(supply, on=["metro_norm", "date"], how="left")
+    # Metro supply features (invt_fs, new_listings, rent, ...) are skipped
+    # in the on-server training path because the merge would push us over
+    # the t3.medium memory budget. The model trains fine without them
+    # (zip_code categorical already captures local market dynamics). When
+    # we move to a bigger box or per-type training, we can re-enable.
+    # Fill with NaN so feature_cols stays consistent and LightGBM treats
+    # them as missing.
+    for col in ["invt_fs", "new_listings", "mean_doz_pending", "perc_price_cut",
+                "median_list_price", "median_rent",
+                "invt_fs_yoy", "new_listings_yoy", "rent_yoy"]:
+        prices[col] = np.float32("nan")
 
     # Step D: rent-to-price ratio — classic valuation signal. Annualized rent ÷ price.
     # High ratio = buying is cheap vs renting (supports prices); low ratio = stretched.
