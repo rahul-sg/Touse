@@ -171,6 +171,9 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
     )
 
     -- ── 4. Final join: prices + macro (equi-join on month) ──
+    -- Filter to rows that are useful: must have at least price_lag_12m
+    -- (the most-used lag feature). Drops the earliest 12 months of every
+    -- (zip, home_type) series — they have no features and no useful target.
     SELECT p.*,
            m.mortgage_rate_30y, m.cpi, m.fed_funds_rate, m.unemployment,
            m.housing_starts, m.consumer_sentiment, m.new_home_sales,
@@ -179,10 +182,21 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
            m.fed_funds_change_3m, m.fed_funds_change_12m
     FROM price_rolling p
     LEFT JOIN macro_final m ON m.month_end = p.date
+    WHERE p.price_lag_12m IS NOT NULL
     """
     df = pd.read_sql(sql, engine)
     df["date"] = pd.to_datetime(df["date"])
     df["metro_norm"] = df["metro"].fillna("").map(normalize_metro)
+
+    # Downcast floats to float32 — halves memory (8B → 4B per cell) with
+    # negligible loss of precision for tree-based models like LightGBM.
+    float_cols = df.select_dtypes(include=["float64"]).columns
+    df[float_cols] = df[float_cols].astype("float32")
+
+    # Categorical encoding for the high-cardinality string columns
+    df["zip_code"] = df["zip_code"].astype("category")
+    df["home_type"] = df["home_type"].astype("category")
+
     return df.sort_values(["zip_code", "home_type", "date"]).reset_index(drop=True)
 
 
@@ -265,6 +279,10 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
     # Only the metro supply equi-join remains in pandas because metro_norm
     # depends on the Python normalize_metro() function.
     supply = _load_metro_supply(engine)
+    # Downcast supply numerics to float32 before merging so the joined panel
+    # stays at the lower memory footprint set by _load_prices_with_macro.
+    supply_float_cols = supply.select_dtypes(include=["float64"]).columns
+    supply[supply_float_cols] = supply[supply_float_cols].astype("float32")
     prices = prices.merge(supply, on=["metro_norm", "date"], how="left")
 
     # Step D: rent-to-price ratio — classic valuation signal. Annualized rent ÷ price.
