@@ -13,7 +13,7 @@ A USA housing tool that shows you **what you can afford, where you can afford it
 - **ZIP price forecast** — a 12-month projection with an 80% confidence band: a global **LightGBM panel model** (lagged prices + US macro + metro supply/rent + election cycle) sets the endpoint, and a per-ZIP **Prophet** model shapes the path. **Type-aware** — switch between all-homes, single-family, and condo forecasts. **Rate-scenario overlays** (rates ±1 point) stress-test sensitivity.
 - **Market context** — live mortgage rate, CPI inflation, US unemployment, and your state's GDP growth.
 - **Now-vs-wait** — models how *X* more months of saving (across three rate scenarios) changes your budget.
-- **Accounts** — email-or-username login, a profile page to manage details and password, and email verification (via Resend).
+- **Accounts** — email-or-username login, email verification, forgot/reset password via short-lived JWT email links, and a Profile page with a "Danger zone" to permanently delete an account (cascades scenarios). All transactional email goes through Resend.
 - **Public calculator** — try affordability anonymously right on the landing page, no signup required.
 
 ---
@@ -279,9 +279,9 @@ All routes live under `/api/v1/*` unless noted. Auth-required endpoints expect a
 | POST | `/api/v1/rental-affordability` | — | Rent-side companion calculator |
 | POST | `/api/v1/readiness` | — | 0–100 readiness score + action plan |
 | POST | `/api/v1/compare/now-vs-wait` | — | Three rate scenarios × N months of additional saving |
-| POST | `/api/v1/register` · `/login` · `/verify-email` | — | Account flow (JWT-issuing) |
+| POST | `/api/v1/register` · `/login` · `/verify-email` · `/forgot-password` · `/reset-password` | — | Account flow (JWT-issuing) |
 | GET / PATCH | `/api/v1/me/{user_id}` · `/account/{user_id}` · `/profile/{user_id}` · `/target-zip/{user_id}` | ✓ | User-self CRUD |
-| POST | `/api/v1/change-password/{user_id}` · `/resend-verification/{user_id}` | ✓ | Sensitive account actions |
+| POST / DELETE | `/api/v1/change-password/{user_id}` · `/resend-verification/{user_id}` · `/account/{user_id}` (delete) | ✓ | Sensitive account actions |
 | GET / POST | `/api/v1/scenarios/user/{user_id}` | ✓ | List / create scenarios for a user |
 | PUT / DELETE / PATCH | `/api/v1/scenarios/{public_id}` · `/.../primary` | ✓ | Mutate / delete / star a scenario (ownership-checked) |
 | GET | `/api/v1/zip/lookup?zip=...` | — | ZIP → lat/lng + city/state |
@@ -448,6 +448,48 @@ The script builds the full panel (~25 min on a laptop), trains LightGBM (~3 min 
 hyperparams), upserts predictions per `(zip, home_type)` (~10 sec), and records a row in
 `model_runs`. Cached Prophet forecasts older than 30 days or stamped with the prior model
 version are automatically re-fit on next request.
+
+### Bulk Prophet refit (offline → upload)
+
+The production box doesn't have cmdstan compiled (Stan's build is too memory-heavy for a
+small EC2). Refit the full `zip_forecast_results` cache on your dev machine and ship it:
+
+```bash
+cd backend
+PYTHONPATH=. DATABASE_URL='postgresql+asyncpg://touse:touse@localhost:5433/touse' \
+  .venv/bin/python scripts/bulk_train_prophet.py            # ~70 min for 53k pairs
+docker compose exec -T postgres pg_dump -U touse -d touse \
+  -t zip_forecast_results --data-only > ~/forecasts.sql
+
+# upload + restore on the server
+scp ~/forecasts.sql ubuntu@<host>:~/
+ssh ubuntu@<host> 'cd ~/touse && docker compose exec -T postgres \
+  psql -U touse -d touse -c "TRUNCATE zip_forecast_results" \
+  && docker compose exec -T postgres psql -U touse -d touse < ~/forecasts.sql'
+```
+
+`bulk_train_prophet.py` uses a `multiprocessing.Pool` with a per-worker SQLAlchemy engine
+(so it never trips Postgres's connection limit). The backend already falls back to LGBM-only
+output if Prophet is unavailable, so the cache simply makes the chart appear instead of the
+"not trained" placeholder.
+
+### Memory monitoring (training runs)
+
+`tools/memutil.{sh,py}` sample resident memory for any ML training process tree by
+command-line pattern. They sum RSS across the parent and every `Pool` worker (the previous
+script — preserved as `tools/memutil_og.sh` for reference — only tracked one PID), and print
+peak / avg / p95 plus a duration summary when the tree exits.
+
+```bash
+./tools/memutil.sh bulk_train_prophet                     # bash, no deps
+./tools/memutil.sh -i 1 -o lgbm_mem.csv train_lgbm        # 1s interval, CSV out
+
+backend/.venv/bin/python tools/memutil.py train_lgbm      # python, includes p50/p95
+backend/.venv/bin/python tools/memutil.py bulk_train_prophet --list   # debug match
+```
+
+Bash is the right pick on the EC2 server (no psutil install); Python adds real percentiles,
+system memory pressure context, and a per-process breakdown for diagnosing pool workers.
 
 ### Running a backtest
 
