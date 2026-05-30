@@ -83,3 +83,37 @@ button {
 input, select, textarea {
   font-family: inherit;
 }
+
+/* ── Mobile baseline ───────────────────────────────────────────────────
+   - 16px+ font on inputs prevents iOS Safari's annoying auto-zoom on focus
+   - Long words/URLs wrap instead of overflowing on narrow viewports
+   - Tap targets get a sensible minimum so buttons aren't 28px tall on phones
+   - Images can never blow out their container
+*/
+input, select, textarea {
+  font-size: 16px;  /* iOS won't zoom in if >=16px */
+}
+
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+p, h1, h2, h3, h4 {
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 768px) {
+  :root {
+    font-size: 15px;  /* slightly tighter on phones — keeps reading rhythm */
+  }
+  button {
+    min-height: 44px;  /* Apple HIG touch-target minimum */
+  }
+  /* Tables and wide blocks shouldn't force horizontal page scroll */
+  table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}

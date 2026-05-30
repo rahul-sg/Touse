@@ -1,10 +1,24 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import styles from './Navbar.module.css'
 
 export default function Navbar() {
   const { user, logout, isLoggedIn } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [open, setOpen] = useState(false)
+
+  // Close the mobile menu whenever the user navigates.
+  useEffect(() => { setOpen(false) }, [location.pathname])
+
+  // Lock body scroll while the mobile menu drawer is open.
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [open])
 
   function handleLogout() {
     logout()
@@ -13,11 +27,18 @@ export default function Navbar() {
 
   return (
     <nav className={styles.nav}>
-      {/* Logo always returns to the landing page. */}
-      <NavLink to="/" className={styles.brand}>
-        Touse
-      </NavLink>
-      <div className={styles.links}>
+      <NavLink to="/" className={styles.brand}>Touse</NavLink>
+
+      <button
+        className={styles.hamburger}
+        aria-label="Toggle menu"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span /><span /><span />
+      </button>
+
+      <div className={`${styles.links} ${open ? styles.linksOpen : ''}`}>
         {isLoggedIn && (
           <NavLink to="/dashboard" className={({ isActive }) => (isActive ? styles.active : '')}>
             Dashboard

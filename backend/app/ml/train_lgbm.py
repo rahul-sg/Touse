@@ -62,20 +62,14 @@ SAMPLE_DEFAULT = 30          # same sample size as Prophet baseline
 
 def _load_prices_with_macro(engine) -> pd.DataFrame:
     """Monthly ZIP prices per (zip, home_type) WITH lag/growth/target features
-    AND macro as-of joined — all done in Postgres.
+    pre-computed by Postgres window functions.
 
-    This is the memory-critical path. By pushing the LAG/LEAD computations,
-    growth ratios, rolling averages, AND the macro as-of join into SQL, the
-    only thing pandas ever sees is the final feature matrix. Peak Python
-    memory drops by roughly 2-3× compared to doing the joins in pandas.
-
-    The macro join uses a window-function-based forward-fill: for each
-    (series, month) we keep the most recent observation at or before that
-    month, then equi-join to prices on month. This avoids the correlated
-    subquery pattern (slow) and the merge_asof intermediate (memory-heavy).
+    The macro join is done in pandas after this returns because the macro
+    table is tiny (~2k rows) and the SQL-side as-of join was slow due to a
+    correlated subquery. The price-side work — LAG/LEAD/AVG over 15M rows
+    partitioned by (zip, home_type) — stays in Postgres where it streams.
     """
     sql = """
-    -- ── 1. Prices with all (zip, home_type) lag/growth/target features ──
     WITH price_lags AS (
         SELECT
             zip_code, home_type, date, median_value, metro,
@@ -86,7 +80,7 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
             LAG(median_value, 24)  OVER w AS price_lag_24m,
             LEAD(median_value, 12) OVER w AS price_future
         FROM zip_price_history
-        WHERE median_value IS NOT NULL AND date >= '2021-01-01'
+        WHERE median_value IS NOT NULL
         WINDOW w AS (PARTITION BY zip_code, home_type ORDER BY date)
     ),
     price_growth AS (
@@ -97,92 +91,19 @@ def _load_prices_with_macro(engine) -> pd.DataFrame:
             median_value / NULLIF(price_lag_12m, 0) - 1 AS growth_12m,
             price_future / NULLIF(median_value,  0) - 1 AS target
         FROM price_lags
-    ),
-    price_rolling AS (
-        SELECT
-            zip_code, home_type, date, median_value, metro,
-            price_lag_1m, price_lag_3m, price_lag_6m, price_lag_12m, price_lag_24m,
-            price_future, target,
-            growth_1m, growth_3m, growth_6m, growth_12m,
-            AVG(growth_1m) OVER w_3  AS growth_3m_avg,
-            AVG(growth_1m) OVER w_12 AS growth_12m_avg
-        FROM price_growth
-        WINDOW
-            w_3  AS (PARTITION BY zip_code, home_type ORDER BY date ROWS BETWEEN 2  PRECEDING AND CURRENT ROW),
-            w_12 AS (PARTITION BY zip_code, home_type ORDER BY date ROWS BETWEEN 11 PRECEDING AND CURRENT ROW)
-    ),
-
-    -- ── 2. Build a calendar of month-end dates covered by prices ──
-    months AS (
-        SELECT DISTINCT date AS month_end FROM zip_price_history WHERE median_value IS NOT NULL
-    ),
-
-    -- ── 3. Macro forward-fill: for each (series, month), latest value ≤ month ──
-    -- One row per (series, month). LATERAL correlates each month with the
-    -- most recent observation at or before it — fast because macro_indicators
-    -- is tiny (~2k rows) and indexed.
-    macro_at_month AS (
-        SELECT
-            m.month_end,
-            s.series_name,
-            (SELECT mi.value
-             FROM macro_indicators mi
-             WHERE mi.geo_id = 'US'
-               AND mi.series_name = s.series_name
-               AND mi.date <= m.month_end
-             ORDER BY mi.date DESC
-             LIMIT 1) AS value
-        FROM months m
-        CROSS JOIN (SELECT DISTINCT series_name FROM macro_indicators WHERE geo_id = 'US') s
-    ),
-    macro_wide AS (
-        SELECT
-            month_end,
-            MAX(value) FILTER (WHERE series_name = 'mortgage_rate_30y') AS mortgage_rate_30y,
-            MAX(value) FILTER (WHERE series_name = 'cpi')               AS cpi,
-            MAX(value) FILTER (WHERE series_name = 'fed_funds_rate')    AS fed_funds_rate,
-            MAX(value) FILTER (WHERE series_name = 'unemployment')      AS unemployment,
-            MAX(value) FILTER (WHERE series_name = 'housing_starts')    AS housing_starts,
-            MAX(value) FILTER (WHERE series_name = 'consumer_sentiment') AS consumer_sentiment,
-            MAX(value) FILTER (WHERE series_name = 'new_home_sales')    AS new_home_sales
-        FROM macro_at_month
-        GROUP BY month_end
-    ),
-    macro_with_lags AS (
-        SELECT *,
-            LAG(cpi, 12)               OVER (ORDER BY month_end) AS cpi_lag12,
-            LAG(mortgage_rate_30y, 3)  OVER (ORDER BY month_end) AS mortgage_rate_lag_3m,
-            LAG(mortgage_rate_30y, 12) OVER (ORDER BY month_end) AS mortgage_rate_lag_12m,
-            LAG(fed_funds_rate, 3)     OVER (ORDER BY month_end) AS fed_funds_lag_3m,
-            LAG(fed_funds_rate, 12)    OVER (ORDER BY month_end) AS fed_funds_lag_12m
-        FROM macro_wide
-    ),
-    macro_final AS (
-        SELECT
-            month_end,
-            mortgage_rate_30y, cpi, fed_funds_rate, unemployment,
-            housing_starts, consumer_sentiment, new_home_sales,
-            mortgage_rate_lag_3m, mortgage_rate_lag_12m,
-            (cpi / NULLIF(cpi_lag12, 0) - 1) * 100         AS cpi_yoy,
-            mortgage_rate_30y - mortgage_rate_lag_3m       AS mortgage_rate_change_3m,
-            fed_funds_rate - fed_funds_lag_3m              AS fed_funds_change_3m,
-            fed_funds_rate - fed_funds_lag_12m             AS fed_funds_change_12m
-        FROM macro_with_lags
     )
-
-    -- ── 4. Final join: prices + macro (equi-join on month) ──
-    -- Filter to rows that are useful: must have at least price_lag_12m
-    -- (the most-used lag feature). Drops the earliest 12 months of every
-    -- (zip, home_type) series — they have no features and no useful target.
-    SELECT p.*,
-           m.mortgage_rate_30y, m.cpi, m.fed_funds_rate, m.unemployment,
-           m.housing_starts, m.consumer_sentiment, m.new_home_sales,
-           m.mortgage_rate_lag_3m, m.mortgage_rate_lag_12m,
-           m.cpi_yoy, m.mortgage_rate_change_3m,
-           m.fed_funds_change_3m, m.fed_funds_change_12m
-    FROM price_rolling p
-    LEFT JOIN macro_final m ON m.month_end = p.date
-    WHERE p.price_lag_12m IS NOT NULL
+    SELECT
+        zip_code, home_type, date, median_value, metro,
+        price_lag_1m, price_lag_3m, price_lag_6m, price_lag_12m, price_lag_24m,
+        price_future, target,
+        growth_1m, growth_3m, growth_6m, growth_12m,
+        AVG(growth_1m) OVER w_3  AS growth_3m_avg,
+        AVG(growth_1m) OVER w_12 AS growth_12m_avg
+    FROM price_growth
+    WHERE price_lag_12m IS NOT NULL
+    WINDOW
+        w_3  AS (PARTITION BY zip_code, home_type ORDER BY date ROWS BETWEEN 2  PRECEDING AND CURRENT ROW),
+        w_12 AS (PARTITION BY zip_code, home_type ORDER BY date ROWS BETWEEN 11 PRECEDING AND CURRENT ROW)
     """
     # Read in chunks and downcast each chunk before holding it in memory.
     # pd.read_sql with no chunksize loads the whole result as float64 then
@@ -285,17 +206,22 @@ def build_panel(engine) -> tuple[pd.DataFrame, list[str]]:
     prices["month_sin"] = np.sin(2 * np.pi * months / 12)
     prices["month_cos"] = np.cos(2 * np.pi * months / 12)
 
-    # Metro supply features (invt_fs, new_listings, rent, ...) are skipped
-    # in the on-server training path because the merge would push us over
-    # the t3.medium memory budget. The model trains fine without them
-    # (zip_code categorical already captures local market dynamics). When
-    # we move to a bigger box or per-type training, we can re-enable.
-    # Fill with NaN so feature_cols stays consistent and LightGBM treats
-    # them as missing.
-    for col in ["invt_fs", "new_listings", "mean_doz_pending", "perc_price_cut",
-                "median_list_price", "median_rent",
-                "invt_fs_yoy", "new_listings_yoy", "rent_yoy"]:
-        prices[col] = np.float32("nan")
+    # Macro as-of join — pandas merge_asof. Macro is tiny (~2k rows).
+    macro = _load_macro(engine)
+    macro_float_cols = macro.select_dtypes(include=["float64"]).columns
+    macro[macro_float_cols] = macro[macro_float_cols].astype("float32")
+    prices = pd.merge_asof(
+        prices.sort_values("date"),
+        macro.sort_values("macro_date"),
+        left_on="date", right_on="macro_date",
+        direction="backward",
+    ).sort_values(["zip_code", "home_type", "date"]).reset_index(drop=True)
+
+    # Metro supply equi-join (cheap on local machine with full RAM).
+    supply = _load_metro_supply(engine)
+    supply_float_cols = supply.select_dtypes(include=["float64"]).columns
+    supply[supply_float_cols] = supply[supply_float_cols].astype("float32")
+    prices = prices.merge(supply, on=["metro_norm", "date"], how="left")
 
     # Step D: rent-to-price ratio — classic valuation signal. Annualized rent ÷ price.
     # High ratio = buying is cheap vs renting (supports prices); low ratio = stretched.

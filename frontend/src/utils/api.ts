@@ -205,6 +205,18 @@ export async function resendVerification(userId: number): Promise<void> {
   await api.post(`/api/v1/auth/resend-verification/${userId}`)
 }
 
+export async function forgotPassword(email: string): Promise<void> {
+  await api.post('/api/v1/auth/forgot-password', { email })
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await api.post('/api/v1/auth/reset-password', { token, new_password: newPassword })
+}
+
+export async function deleteAccount(userId: number): Promise<void> {
+  await api.delete(`/api/v1/auth/account/${userId}`)
+}
+
 export async function getNearestZip(lat: number, lng: number): Promise<{
   zip_code: string; lat: number; lng: number; city: string | null; state_code: string | null
 } | null> {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useAuth } from '../context/AuthContext'
-import { getMe, updateAccount, changePassword } from '../utils/api'
+import { getMe, updateAccount, changePassword, deleteAccount } from '../utils/api'
 import styles from './Profile.module.css'
 
 interface AccountForm {
@@ -25,12 +25,15 @@ function extractError(err: unknown, fallback: string): string {
 }
 
 export default function Profile() {
-  const { user, isLoggedIn, updateUser } = useAuth()
+  const { user, isLoggedIn, updateUser, logout } = useAuth()
   const navigate = useNavigate()
 
   const [username, setUsername] = useState('')
   const [accountMsg, setAccountMsg] = useState<Msg>(null)
   const [passwordMsg, setPasswordMsg] = useState<Msg>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteMsg, setDeleteMsg] = useState<Msg>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const account = useForm<AccountForm>({
     defaultValues: { first_name: '', last_name: '', email: '' },
@@ -78,6 +81,20 @@ export default function Profile() {
       setPasswordMsg({ ok: true, text: 'Password changed.' })
     } catch (err) {
       setPasswordMsg({ ok: false, text: extractError(err, 'Could not change your password.') })
+    }
+  }
+
+  async function onDeleteAccount() {
+    if (!user) return
+    setDeleteMsg(null)
+    setDeleting(true)
+    try {
+      await deleteAccount(user.user_id)
+      logout()
+      navigate('/')
+    } catch (err) {
+      setDeleteMsg({ ok: false, text: extractError(err, 'Could not delete your account.') })
+      setDeleting(false)
     }
   }
 
@@ -171,6 +188,37 @@ export default function Profile() {
               {password.formState.isSubmitting ? 'Saving…' : 'Change password'}
             </button>
           </form>
+        </div>
+
+        {/* ── Danger zone ── */}
+        <div className={styles.card} style={{ borderColor: '#d4a4a4' }}>
+          <h2 className={styles.cardTitle} style={{ color: '#a33' }}>Delete account</h2>
+          <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.75rem' }}>
+            This permanently removes your account and all your saved scenarios.
+            This cannot be undone. Type <strong>DELETE</strong> below to confirm.
+          </p>
+          <div className={styles.field}>
+            <input
+              type="text"
+              placeholder="Type DELETE to confirm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              autoCapitalize="characters"
+              spellCheck={false}
+            />
+          </div>
+          {deleteMsg && (
+            <p className={deleteMsg.ok ? styles.success : styles.error}>{deleteMsg.text}</p>
+          )}
+          <button
+            type="button"
+            className={styles.submitBtn}
+            disabled={deleteConfirm !== 'DELETE' || deleting}
+            onClick={onDeleteAccount}
+            style={{ background: deleteConfirm === 'DELETE' ? '#a33' : undefined }}
+          >
+            {deleting ? 'Deleting…' : 'Permanently delete my account'}
+          </button>
         </div>
       </div>
     </div>

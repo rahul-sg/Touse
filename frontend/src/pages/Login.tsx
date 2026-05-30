@@ -89,6 +89,9 @@ export default function Login() {
         </form>
 
         <p className={styles.altLink}>
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
+        <p className={styles.altLink}>
           New to Touse?{' '}
           <Link to="/onboarding">Get started →</Link>
         </p>

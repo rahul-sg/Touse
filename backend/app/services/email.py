@@ -37,6 +37,32 @@ async def send_email(to: str, subject: str, html: str) -> bool:
         return False
 
 
+async def send_password_reset_email(to: str, first_name: str, token: str) -> bool:
+    """Send a password-reset link. Token expires in 1 hour (see security.py)."""
+    link = f"{FRONTEND_URL}/reset-password?token={token}"
+    html = f"""
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#1d1d1d">
+        <h2 style="color:#1C3A2F">Reset your Touse password</h2>
+        <p>Hi {first_name}, we got a request to reset the password on your account.
+           Click the button below to choose a new one. If you didn't ask for this,
+           you can safely ignore this email.</p>
+        <p style="margin:28px 0">
+          <a href="{link}"
+             style="background:#1C3A2F;color:#fff;padding:12px 24px;border-radius:4px;
+                    text-decoration:none;font-weight:600">
+            Reset password
+          </a>
+        </p>
+        <p style="color:#666;font-size:13px">
+          Or paste this link into your browser:<br>
+          <a href="{link}" style="color:#1C3A2F">{link}</a>
+        </p>
+        <p style="color:#999;font-size:12px">This link expires in 1 hour.</p>
+      </div>
+    """
+    return await send_email(to, "Reset your Touse password", html)
+
+
 async def send_verification_email(to: str, first_name: str, token: str) -> bool:
     """Send the account email-verification link."""
     link = f"{FRONTEND_URL}/verify-email?token={token}"

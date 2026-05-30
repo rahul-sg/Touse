@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Listing, PropertyType } from '../types'
 import styles from './ListingSidebar.module.css'
@@ -36,20 +37,34 @@ export default function ListingSidebar({
   onListingClick,
   selectedId,
 }: Props) {
+  // Mobile-only: the sidebar starts collapsed as a bottom drawer; tap the
+  // header to slide it up. On desktop this state is ignored (CSS keeps the
+  // sidebar fully visible at all widths > 768px).
+  const [mobileOpen, setMobileOpen] = useState(false)
+
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
       {zipForecastPanel && (
         <div className={styles.forecastSlot}>{zipForecastPanel}</div>
       )}
 
-      <div className={styles.listHeader}>
+      <button
+        type="button"
+        className={styles.listHeader}
+        onClick={() => setMobileOpen(o => !o)}
+        aria-label={mobileOpen ? 'Hide listings' : 'Show listings'}
+        style={{ width: '100%', cursor: 'pointer', textAlign: 'left', border: 'none' }}
+      >
         <h2 className={styles.heading}>
           Listings
           {listings.length > 0 && (
             <span className={styles.resultCount}>{listings.length} in range</span>
           )}
+          <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+            {mobileOpen ? '▼' : '▲'}
+          </span>
         </h2>
-      </div>
+      </button>
 
       <div className={styles.list}>
         {isLoading && (

@@ -15,6 +15,8 @@ import Methodology from './pages/Methodology'
 import Scenarios from './pages/Scenarios'
 import ScenarioDetail from './pages/ScenarioDetail'
 import VerifyEmail from './pages/VerifyEmail'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 const queryClient = new QueryClient()
 
@@ -30,6 +32,8 @@ export default function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/map" element={<MapView />} />

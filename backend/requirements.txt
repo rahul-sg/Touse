@@ -33,6 +33,9 @@ psycopg2-binary==2.9.9
 # Date utilities
 python-dateutil==2.9.0
 
+# System / process monitoring (used by tools/memutil.py)
+psutil==5.9.8
+
 # Email validation
 pydantic[email]==2.7.1
 email-validator==2.1.1

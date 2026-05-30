@@ -75,3 +75,25 @@ def decode_email_token(token: str) -> int | None:
         return int(payload["sub"])
     except (JWTError, ValueError, KeyError):
         return None
+
+
+def create_password_reset_token(user_id: int) -> str:
+    """Mint a short-lived signed token used in password-reset email links.
+    Expires in 1 hour for tighter security than the email verify token."""
+    expire = datetime.now(timezone.utc) + timedelta(hours=1)
+    return jwt.encode(
+        {"sub": str(user_id), "purpose": "password_reset", "exp": expire},
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_password_reset_token(token: str) -> int | None:
+    """Return the user id from a valid password-reset token, else None."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "password_reset":
+            return None
+        return int(payload["sub"])
+    except (JWTError, ValueError, KeyError):
+        return None

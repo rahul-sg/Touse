@@ -10,6 +10,30 @@
   /* Stack above the map's MapLibre controls. */
   position: relative;
   z-index: 5;
+  -webkit-overflow-scrolling: touch;  /* momentum scroll on iOS */
+  scrollbar-width: none;
+}
+.bar::-webkit-scrollbar { display: none; }
+
+@media (max-width: 768px) {
+  .bar {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+  .label {
+    display: none;  /* hide group labels to save horizontal room */
+  }
+  .divider {
+    display: none;
+  }
+  /* Result count is more useful than filter pills on a phone screen, so it
+     pins to the right and keeps the rest of the row scrollable. */
+  .countWrap {
+    position: sticky;
+    right: 0;
+    background: linear-gradient(to right, rgba(255,255,255,0), var(--color-surface) 30%);
+    padding-left: 1.5rem;
+  }
 }
 
 .group {

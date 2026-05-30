@@ -32,6 +32,17 @@
   position: relative;
 }
 
+/* Mobile: map fills the body; sidebar overlays as a bottom drawer
+   (see ListingSidebar.module.css for the drawer positioning). */
+@media (max-width: 768px) {
+  .body {
+    position: relative;
+  }
+  .mapWrap {
+    width: 100%;
+  }
+}
+
 /* ZIP overlay badge — floats in the top-left of the map */
 .zipOverlay {
   position: absolute;

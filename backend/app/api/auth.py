@@ -11,10 +11,12 @@ from app.security import (
     create_access_token,
     create_email_token,
     decode_email_token,
+    create_password_reset_token,
+    decode_password_reset_token,
     get_current_user_id,
     require_self,
 )
-from app.services.email import send_verification_email
+from app.services.email import send_verification_email, send_password_reset_email
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -66,6 +68,15 @@ class TokenResponse(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -353,3 +364,64 @@ async def change_password(
     user.hashed_password = _hash_password(body.new_password)
     await db.commit()
     return {"status": "ok"}
+
+
+# ── Password reset (unauthenticated, email-token flow) ─────────────────────
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Email a reset link if the address belongs to a user.
+
+    Always returns 200 with the same body — never reveals whether the
+    address is registered (standard practice to avoid email enumeration).
+    """
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if user:
+        token = create_password_reset_token(user.id)
+        await send_password_reset_email(user.email, user.first_name, token)
+    return {"status": "ok"}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Set a new password using a valid reset token from the email link."""
+    user_id = decode_password_reset_token(body.token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    user.hashed_password = _hash_password(body.new_password)
+    await db.commit()
+    return {"status": "ok"}
+
+
+# ── Delete account (authenticated, irreversible) ───────────────────────────
+
+@router.delete("/account/{user_id}", status_code=204)
+async def delete_account(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """Hard-delete the user's account and all associated scenarios.
+
+    Other tables that reference users (forecast_realizations, etc.) use
+    nullable user_id or cascade rules at the model level. Scenarios are
+    deleted explicitly because they're user-owned.
+    """
+    require_self(user_id, current_user_id)
+    user = await _get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Wipe scenarios first (no DB-level cascade for portability).
+    await db.execute(
+        Scenario.__table__.delete().where(Scenario.user_id == user_id)
+    )
+    await db.delete(user)
+    await db.commit()
+    return None
