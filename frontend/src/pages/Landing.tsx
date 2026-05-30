@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import AffordabilityCalculator from '../components/AffordabilityCalculator'
+import NewAccountCta from '../components/NewAccountCta'
 import styles from './Landing.module.css'
 
 const HOW_IT_WORKS = [
@@ -105,9 +106,9 @@ export default function Landing() {
             show you homes in your real budget — not just what the bank says.
           </p>
           <div className={styles.heroActions}>
-            <Link to="/onboarding" className={styles.ctaBtn}>
+            <NewAccountCta className={styles.ctaBtn}>
               Get started free →
-            </Link>
+            </NewAccountCta>
             <Link to="/login" className={styles.ghostBtn}>
               Sign in
             </Link>
@@ -225,9 +226,9 @@ export default function Landing() {
               shift up or down would change the outlook — and decide whether now is your moment, or
               whether waiting makes more sense. Your budget, your timeline, your call.
             </p>
-            <Link to="/onboarding" className={styles.forecastCta}>
+            <NewAccountCta className={styles.forecastCta}>
               See your forecast →
-            </Link>
+            </NewAccountCta>
           </div>
           <div className={styles.forecastVisual}>
             <div className={styles.fvChart}>
@@ -274,9 +275,9 @@ export default function Landing() {
             Free forever. No credit pull. No mortgage broker pitch. Just your real budget and the
             homes that fit it.
           </p>
-          <Link to="/onboarding" className={styles.ctaBtn}>
+          <NewAccountCta className={styles.ctaBtn}>
             Create your free account →
-          </Link>
+          </NewAccountCta>
         </div>
       </section>
 
