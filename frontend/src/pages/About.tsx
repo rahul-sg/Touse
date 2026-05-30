@@ -238,9 +238,8 @@ P = L · r / (1 − (1 + r)<sup>−n</sup>)
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>How fresh is the data?</h2>
         <p>
-          Every market data source is refreshed by a scheduled Celery job that runs on the same
-          cadence the publisher itself releases data — so what you see is never more than one
-          publication cycle behind.
+          Every market data source is refreshed automatically on the same cadence the publisher
+          itself releases data — so what you see is never more than one publication cycle behind.
         </p>
         <ul className={styles.list}>
           <li><strong>Mortgage rates</strong> — Freddie Mac PMMS, weekly (Fridays)</li>
@@ -284,17 +283,10 @@ P = L · r / (1 − (1 + r)<sup>−n</sup>)
           Resend; if Resend is unconfigured the email is logged and the account still works.
         </p>
         <p>
-          You're in control of your account. Forgot your password? Request a reset link from the
-          sign-in page and we'll email you a one-time link that expires in an hour. Done with
-          Touse? The Profile page has a "Danger zone" that permanently deletes your account and
-          every scenario you've saved — there's no soft-delete, no recovery, no "we kept a copy
-          just in case." Type DELETE, confirm, and your data is gone.
-        </p>
-        <p>
-          The app is built mobile-first: the navigation collapses to a drawer on phones, the map
-          page shows a swipe-up bottom drawer for listings, and form inputs are sized to avoid
-          iOS's annoying auto-zoom on focus. Use Touse from your laptop while doing your taxes,
-          or pull it up on your phone while you're walking through an open house.
+          You stay in control of your account. Forgot your password? Reset it from the sign-in
+          page. Done with Touse? The Profile page lets you permanently delete your account and
+          every scenario you've saved — no soft-delete, no recovery, no "we kept a copy just in
+          case."
         </p>
       </section>
 

@@ -20,29 +20,30 @@ A USA housing tool that shows you **what you can afford, where you can afford it
 
 ## Architecture
 
-Touse is a small monolith split into four cooperating processes — a Vite SPA, a FastAPI backend, a Celery worker, and a Celery Beat scheduler — backed by PostgreSQL and Redis. Market data is collected by Celery on a public-source cadence, written to Postgres, and served read-mostly by FastAPI. The forecast pipeline is two-stage: a global LightGBM panel sets each ZIP × home-type's 12-month endpoint offline, and a per-`(zip, home_type)` Prophet model shapes the monthly path on demand.
+Touse is a small monolith split into five cooperating processes — a Caddy reverse proxy, a Vite SPA, a FastAPI backend, a Celery worker, and a Celery Beat scheduler — backed by PostgreSQL and Redis. Market data is collected by Celery on a public-source cadence, written to Postgres, and served read-mostly by FastAPI behind Caddy on port 80. The forecast pipeline is two-stage: a global LightGBM panel sets each ZIP × home-type's 12-month endpoint offline, and a per-`(zip, home_type)` Prophet model shapes the monthly path on demand.
 
 ```mermaid
 flowchart TB
-    UI["Browser — React + Vite SPA<br/>(JWT in localStorage · TanStack Query cache)"]
+    UI["Browser — React + Vite SPA<br/>(JWT in localStorage · TanStack Query cache)<br/>responsive: hamburger nav + bottom-drawer map on mobile"]
+    CADDY["Caddy reverse proxy<br/>:80 → /api/* → backend:8000<br/>          /*    → frontend:3000"]
 
     subgraph api[FastAPI backend]
         direction TB
-        AUTH["Auth + profile<br/>(JWT mint · ownership checks)"]
+        AUTH["Auth + profile<br/>register · login · verify-email · forgot/reset password · delete account<br/>(JWT mint · ownership checks)"]
         AFFORD["Affordability + readiness<br/>(28/36 rule · 6 loan types · DTI scoring)"]
         FORECAST["ZIP forecast API<br/>/lookup · /forecast · /projection · /market-context"]
         LISTINGS["Listings API<br/>(RapidAPI proxy → cache → geocoder)"]
-        PROJ["zip_projection service<br/>Prophet path + LightGBM endpoint anchor<br/>(trained on demand · cached per zip × home_type)"]
+        PROJ["zip_projection service<br/>Prophet path + LightGBM endpoint anchor<br/>(cached per zip × home_type · graceful LGBM-only fallback if Stan unavailable)"]
     end
 
     subgraph jobs[Celery]
         direction TB
         BEAT["Beat — cron scheduler"]
         ETLW["Worker — ETL tasks<br/>(Zillow ZHVI · Zillow metro · FRED · Freddie · BEA)"]
-        MLW["Worker — ML tasks<br/>(train_global_lgbm · refresh_zip_forecasts)"]
+        MLW["Worker — ML tasks<br/>(train_global_lgbm · refresh_zip_forecasts · realize_forecasts)"]
     end
 
-    DB[("PostgreSQL<br/>15.8M price rows · macro · listings · users")]
+    DB[("PostgreSQL<br/>15.8M price rows · macro · listings · users · forecast cache")]
     REDIS[("Redis<br/>Celery broker + result backend<br/>(optional rate-limit store)")]
 
     subgraph ext[External services]
@@ -53,10 +54,11 @@ flowchart TB
         RESEND["Resend (transactional email)"]
     end
 
-    UI -->|"REST + Bearer JWT"| AUTH
-    UI --> AFFORD
-    UI --> FORECAST
-    UI --> LISTINGS
+    UI -->|HTTPS| CADDY
+    CADDY -->|/api/*| AUTH
+    CADDY --> AFFORD
+    CADDY --> FORECAST
+    CADDY --> LISTINGS
 
     AUTH <--> DB
     AFFORD <--> DB
@@ -65,7 +67,7 @@ flowchart TB
     LISTINGS <--> DB
     LISTINGS -->|cache miss| RAPID
     LISTINGS -->|geocode| CENSUS
-    AUTH -->|verification| RESEND
+    AUTH -->|verification + reset| RESEND
     api -. slowapi rate limit .-> REDIS
 
     BEAT --> REDIS
@@ -449,46 +451,24 @@ hyperparams), upserts predictions per `(zip, home_type)` (~10 sec), and records 
 `model_runs`. Cached Prophet forecasts older than 30 days or stamped with the prior model
 version are automatically re-fit on next request.
 
-### Bulk Prophet refit (offline → upload)
-
-The production box doesn't have cmdstan compiled (Stan's build is too memory-heavy for a
-small EC2). Refit the full `zip_forecast_results` cache on your dev machine and ship it:
-
-```bash
-cd backend
-PYTHONPATH=. DATABASE_URL='postgresql+asyncpg://touse:touse@localhost:5433/touse' \
-  .venv/bin/python scripts/bulk_train_prophet.py            # ~70 min for 53k pairs
-docker compose exec -T postgres pg_dump -U touse -d touse \
-  -t zip_forecast_results --data-only > ~/forecasts.sql
-
-# upload + restore on the server
-scp ~/forecasts.sql ubuntu@<host>:~/
-ssh ubuntu@<host> 'cd ~/touse && docker compose exec -T postgres \
-  psql -U touse -d touse -c "TRUNCATE zip_forecast_results" \
-  && docker compose exec -T postgres psql -U touse -d touse < ~/forecasts.sql'
-```
-
-`bulk_train_prophet.py` uses a `multiprocessing.Pool` with a per-worker SQLAlchemy engine
-(so it never trips Postgres's connection limit). The backend already falls back to LGBM-only
-output if Prophet is unavailable, so the cache simply makes the chart appear instead of the
-"not trained" placeholder.
-
 ### Memory monitoring (training runs)
 
 `tools/memutil.{sh,py}` sample resident memory for any ML training process tree by
 command-line pattern. They sum RSS across the parent and every `Pool` worker (the previous
 script — preserved as `tools/memutil_og.sh` for reference — only tracked one PID), and print
-peak / avg / p95 plus a duration summary when the tree exits.
+peak / avg / p95 plus a duration summary when the tree exits. Useful for sizing the EC2
+instance: run an LGBM or Prophet retrain through these and the peak RSS tells you whether
+the current instance has headroom or it's time to upgrade.
 
 ```bash
-./tools/memutil.sh bulk_train_prophet                     # bash, no deps
+./tools/memutil.sh train_lgbm                             # bash, no deps
 ./tools/memutil.sh -i 1 -o lgbm_mem.csv train_lgbm        # 1s interval, CSV out
 
 backend/.venv/bin/python tools/memutil.py train_lgbm      # python, includes p50/p95
-backend/.venv/bin/python tools/memutil.py bulk_train_prophet --list   # debug match
+backend/.venv/bin/python tools/memutil.py refresh_zip_forecasts --list   # debug match
 ```
 
-Bash is the right pick on the EC2 server (no psutil install); Python adds real percentiles,
+Bash is the right pick if you don't want to install psutil; Python adds real percentiles,
 system memory pressure context, and a per-process breakdown for diagnosing pool workers.
 
 ### Running a backtest
